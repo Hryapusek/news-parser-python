@@ -29,13 +29,15 @@ class URLLoader:
         return " ".join(result)
 
     @staticmethod
-    def __extract_consecutive_russian_lines(text: str, threshold=3, russian_threshold=0.5):
+    def __extract_consecutive_russian_lines(text: str, threshold=3, russian_threshold=0.5, max_skipped_lines=5):
         # Split the text into lines
         lines = text.split('\n')
         
         consecutive_count = 0
         consecutive_russian_lines = []
+        temp_consecutive_russian_lines = []
         reached_threshold = False
+        skipped_after_threashold_reached = 0
         
         for line in lines:
             # Calculate the percentage of Russian letters in the line
@@ -45,15 +47,22 @@ class URLLoader:
             
             # Check if the percentage of Russian letters exceeds the threshold
             if russian_percentage >= russian_threshold:
+                skipped_after_threashold_reached = 0
                 consecutive_count += 1
-                consecutive_russian_lines.append(line.strip())
+                temp_consecutive_russian_lines.append(line.strip())
                 if consecutive_count >= threshold:
+                    consecutive_russian_lines.extend(temp_consecutive_russian_lines)
+                    temp_consecutive_russian_lines = []
                     reached_threshold = True
             elif reached_threshold:
-                return consecutive_russian_lines
+                temp_consecutive_russian_lines = []
+                consecutive_count = 0
+                skipped_after_threashold_reached += 1
+                if skipped_after_threashold_reached >= max_skipped_lines:
+                    return consecutive_russian_lines
             else:
                 consecutive_count = 0
-                consecutive_russian_lines = []
+                temp_consecutive_russian_lines = []
         
         if reached_threshold:
             return consecutive_russian_lines
