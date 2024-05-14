@@ -9,6 +9,8 @@ import bs4
 
 class CommersantParser(BaseParser):
 
+    prefix = "commersant"
+
     __url = "https://www.kommersant.ru/listpage/lazyloaddocs?regionid=0&listtypeid=4&listid=86&date=14.05.2024&intervaltype=1&idafter=6691521"
     __url_template = "https://www.kommersant.ru/listpage/lazyloaddocs"
     __url__params = {

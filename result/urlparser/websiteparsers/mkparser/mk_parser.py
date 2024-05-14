@@ -9,6 +9,8 @@ import bs4
 
 class MkParser(BaseParser):
     
+    prefix = "mk"
+
     __url = "https://www.mk.ru/news/2024/5/12/"
     __url_template = "https://www.mk.ru/news/%s/%s/%s/"
 

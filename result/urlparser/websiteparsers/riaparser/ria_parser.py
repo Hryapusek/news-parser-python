@@ -9,6 +9,8 @@ import bs4
 
 class RiaParser(BaseParser):
     
+    mk = "ria"
+
     __url = "https://ria.ru/services/20240513/more.html?date=20240513T150600"
     __url_template = "https://ria.ru/services/%Y%m%d/more.html?date=%Y%m%dT%H%M%S"
 
