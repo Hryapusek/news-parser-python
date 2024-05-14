@@ -16,9 +16,11 @@ class MkParser(BaseParser):
 
 
     @staticmethod
-    def load_articles_urls(begin_date: datetime, end_date: datetime) -> dict[datetime, list[str]]:
+    def load_articles_urls(begin_date: datetime, end_date: datetime, stop_sign = None) -> dict[datetime, list[str]]:
         result_urls: dict[datetime, list[str]] = {}
         for current_date in daterange(begin_date, end_date + timedelta(1)):
+            if stop_sign and stop_sign.is_set():
+                return result_urls
             result_urls[current_date] = __class__.__get_urls(current_date)
         return result_urls
 

@@ -17,15 +17,16 @@ class RiaParser(BaseParser):
 
 
     @staticmethod
-    def load_articles_urls(begin_date: datetime, end_date: datetime) -> dict[datetime, list[str]]:
+    def load_articles_urls(begin_date: datetime, end_date: datetime, stop_sign = None) -> dict[datetime, list[str]]:
         result_urls: dict[datetime, list[str]] = {}
         for current_date in daterange(begin_date, end_date + timedelta(1)):
             result_urls[current_date] = []
             current_time_lower_threshold = current_date.replace(hour=00, minute=00, second=00)
             current_date_time = current_date.replace(hour=23, minute=59, second=59)
             while current_date_time >= current_time_lower_threshold:
+                if stop_sign and stop_sign.is_set():
+                    return result_urls
                 current_urls, last_time = __class__.__get_urls(current_date_time)
-                last_time: datetime
                 result_urls[current_date].extend(current_urls)
                 current_date_time = current_date_time.replace(hour=last_time.hour, minute=last_time.minute, second=0)
                 if len(current_urls) < 20:

@@ -8,5 +8,6 @@ class BaseParser(ABC):
 
     @staticmethod
     @abstractmethod
-    def load_articles_urls(begin_date: datetime, end_date: datetime):
+    def load_articles_urls(begin_date: datetime, end_date: datetime, stop_sign = None) \
+                        -> dict[datetime, list[str]]:
         pass

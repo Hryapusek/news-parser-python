@@ -1,13 +1,14 @@
 import requests
 import html2text
 import re
+from typing import Union
 from .exceptions import *
 
 
 class URLLoader:
 
     @staticmethod
-    def load_text_from_url(url: str) -> str | None:
+    def load_text_from_url(url: str) -> Union[str, None]:
         """
         Returns:
             Text if there is some, None otherwise
