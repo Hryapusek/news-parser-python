@@ -23,8 +23,12 @@ PyQt5 matplotlib
 
 
 ria.ru
+https://ria.ru/20240513/
     Получаем событие за любое число
 
 kommersant.ru
+https://www.kommersant.ru/archive/news/day/2024-05-13
+https://www.kommersant.ru/listpage/lazyloaddocs?regionid=0&listtypeid=4&listid=86&date=14.05.2024&intervaltype=1&idafter=6691521
 
 mk.ru
+https://www.mk.ru/news/2024/5/12/
