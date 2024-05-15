@@ -1,6 +1,9 @@
+import asyncio
 import os
 from datetime import datetime, timedelta
 from threading import Thread, Event
+from concurrent.futures import Future, ThreadPoolExecutor
+import threading
 
 from urlparser.parse_tools import URLLoader
 from urlparser.websiteparsers.article import Article
@@ -38,7 +41,7 @@ class ArticleLoader:
 
     @staticmethod
     def __load_articles_from_internet(begin_date: datetime, end_date: datetime):
-        date_url = {}
+        date_url: dict[datetime, set] = {}
         for parser in __class__.__website_parsers:
             if __class__.__need_to_stop.is_set():
                 return
@@ -47,8 +50,8 @@ class ArticleLoader:
                 return
             for date in result:
                 if date not in date_url:
-                    date_url[date] = []
-                date_url[date].extend(result[date])
+                    date_url[date] = set()
+                date_url[date] = date_url[date].union(result[date])
         __class__.__write_to_files(date_url)
         __class__.__read_from_files(begin_date, end_date)
 
@@ -62,13 +65,31 @@ class ArticleLoader:
                 continue
             date_articles[current_date] = []
             for file in os.listdir(current_date_directory):
-                with open(os.path.join(file, current_date_directory)) as article_file:
+                with open(os.path.join(current_date_directory, file), encoding="utf-16") as article_file:
                     article = Article()
                     article.date = current_date
                     article.text = article_file.read().strip()
                     date_articles[current_date].append(article)
         __class__.__date_articles = date_articles
             
+    def process_url(filename, url, current_date_directory):
+        if __class__.__need_to_stop.is_set(): return
+        import time
+        start_time = time.time()
+        try:
+            text = URLLoader.load_text_from_url(url)
+        except Exception:
+            try:
+                text = URLLoader.load_text_from_url(url)
+            except Exception:
+                print(f"Failed to load text from URL after retrying, elapsed time: {time.time() - start_time:.2f} seconds")
+                return
+        print(f"Successfully loaded text from URL, elapsed time: {time.time() - start_time:.2f} seconds")
+        if __class__.__need_to_stop.is_set(): return
+        if not text:
+            return
+        with open(os.path.join(current_date_directory, filename), "w", encoding="utf-16") as file:
+            file.write(text)
 
     @staticmethod
     def __write_to_files(date_url):
@@ -79,16 +100,21 @@ class ArticleLoader:
             counter = 0
             if not os.path.isdir(current_date_directory):
                 os.mkdir(current_date_directory)
-            for url in date_url[date]:
-                text = URLLoader.load_text_from_url(url)
-                if not text:
-                    continue
-                filename = __class__.ARTICLE_FILENAME_TEMPLATE % (counter)
-                while os.path.isfile(os.path.join(current_date_directory, filename)):
-                    counter += 1
+            
+            with ThreadPoolExecutor(os.cpu_count()) as pool:
+                futures: list[Future] = []
+                for url in date_url[date]:
+                    if __class__.__need_to_stop.is_set(): break
                     filename = __class__.ARTICLE_FILENAME_TEMPLATE % (counter)
-                with open(os.path.join(current_date_directory, filename), "w", encoding="utf-16") as file:
-                    file.write(text)
+                    while os.path.isfile(os.path.join(current_date_directory, filename)):
+                        counter += 1
+                        filename = __class__.ARTICLE_FILENAME_TEMPLATE % (counter)
+                    counter += 1
+                    futures.append(pool.submit(__class__.process_url, filename, url, current_date_directory))
+                for future in futures:
+                    future.result()
+                    
+                    
                 
 
     @staticmethod
