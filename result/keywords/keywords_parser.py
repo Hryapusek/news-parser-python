@@ -1,6 +1,8 @@
 import functools
 import re
 
+from textprocess.text_processing import TextProcessor
+
 class SubCategory:
     def __init__(self) -> None:
         self.name: str = ""
@@ -44,7 +46,7 @@ class KeywordsParser:
 
                     # Find all contents within this subsection
                     subsection_text = re.split(subsection_pattern, subsections_text)[subsections.index(subsection_name) + 1].strip()
-                    subsection.keywords = subsection_text.split()
+                    subsection.keywords = TextProcessor.normalize(subsection_text)
 
                 # Add the section to the list of classes
                 categories.append(section)
