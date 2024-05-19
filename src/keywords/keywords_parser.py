@@ -1,4 +1,3 @@
-import functools
 import re
 
 from textprocess.text_processing import TextProcessor

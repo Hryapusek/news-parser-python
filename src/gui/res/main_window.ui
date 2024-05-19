@@ -1,0 +1,257 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>MainWindow</class>
+ <widget class="QMainWindow" name="MainWindow">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>861</width>
+    <height>653</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Обработка новостей</string>
+  </property>
+  <widget class="QWidget" name="centralwidget">
+   <property name="sizePolicy">
+    <sizepolicy hsizetype="Maximum" vsizetype="Maximum">
+     <horstretch>0</horstretch>
+     <verstretch>0</verstretch>
+    </sizepolicy>
+   </property>
+   <layout class="QVBoxLayout" name="verticalLayout_4">
+    <item>
+     <widget class="QTabWidget" name="tabs">
+      <property name="currentIndex">
+       <number>1</number>
+      </property>
+      <widget class="QWidget" name="graphics_tab">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <attribute name="title">
+        <string>Графики</string>
+       </attribute>
+      </widget>
+      <widget class="QWidget" name="articles_tab">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Maximum" vsizetype="Maximum">
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <attribute name="title">
+        <string>Статьи</string>
+       </attribute>
+       <layout class="QFormLayout" name="formLayout">
+        <item row="0" column="0" colspan="2">
+         <widget class="QSplitter" name="splitter">
+          <property name="sizePolicy">
+           <sizepolicy hsizetype="Minimum" vsizetype="Maximum">
+            <horstretch>0</horstretch>
+            <verstretch>0</verstretch>
+           </sizepolicy>
+          </property>
+          <property name="orientation">
+           <enum>Qt::Horizontal</enum>
+          </property>
+          <widget class="QWidget" name="layoutWidget">
+           <layout class="QVBoxLayout" name="verticalLayout">
+            <item>
+             <widget class="QLabel" name="label">
+              <property name="font">
+               <font>
+                <pointsize>12</pointsize>
+               </font>
+              </property>
+              <property name="text">
+               <string>Информация о загрузке</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QTextEdit" name="articles_logs">
+              <property name="readOnly">
+               <bool>true</bool>
+              </property>
+             </widget>
+            </item>
+           </layout>
+          </widget>
+          <widget class="QWidget" name="layoutWidget">
+           <layout class="QVBoxLayout" name="verticalLayout_2">
+            <item>
+             <layout class="QHBoxLayout" name="horizontalLayout_2">
+              <item>
+               <widget class="QLabel" name="label_2">
+                <property name="font">
+                 <font>
+                  <pointsize>12</pointsize>
+                 </font>
+                </property>
+                <property name="text">
+                 <string>С какого момента</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QDateEdit" name="from_date">
+                <property name="dateTime">
+                 <datetime>
+                  <hour>0</hour>
+                  <minute>0</minute>
+                  <second>0</second>
+                  <year>2024</year>
+                  <month>5</month>
+                  <day>13</day>
+                 </datetime>
+                </property>
+                <property name="date">
+                 <date>
+                  <year>2024</year>
+                  <month>5</month>
+                  <day>13</day>
+                 </date>
+                </property>
+               </widget>
+              </item>
+             </layout>
+            </item>
+            <item>
+             <layout class="QHBoxLayout" name="horizontalLayout_3">
+              <item>
+               <widget class="QLabel" name="label_3">
+                <property name="font">
+                 <font>
+                  <pointsize>12</pointsize>
+                 </font>
+                </property>
+                <property name="text">
+                 <string>По какой момент</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QDateEdit" name="to_date">
+                <property name="date">
+                 <date>
+                  <year>2024</year>
+                  <month>5</month>
+                  <day>13</day>
+                 </date>
+                </property>
+               </widget>
+              </item>
+             </layout>
+            </item>
+            <item>
+             <layout class="QVBoxLayout" name="verticalLayout_3">
+              <item>
+               <widget class="QPushButton" name="load_from_internet_btn">
+                <property name="minimumSize">
+                 <size>
+                  <width>0</width>
+                  <height>30</height>
+                 </size>
+                </property>
+                <property name="text">
+                 <string>Загрузить из интернета</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QPushButton" name="load_from_docs_btn">
+                <property name="minimumSize">
+                 <size>
+                  <width>0</width>
+                  <height>30</height>
+                 </size>
+                </property>
+                <property name="text">
+                 <string>Загрузить из документов</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QPushButton" name="cancel_btn">
+                <property name="minimumSize">
+                 <size>
+                  <width>0</width>
+                  <height>30</height>
+                 </size>
+                </property>
+                <property name="text">
+                 <string>Отмена</string>
+                </property>
+               </widget>
+              </item>
+             </layout>
+            </item>
+            <item>
+             <spacer name="verticalSpacer">
+              <property name="orientation">
+               <enum>Qt::Vertical</enum>
+              </property>
+              <property name="sizeType">
+               <enum>QSizePolicy::Expanding</enum>
+              </property>
+              <property name="sizeHint" stdset="0">
+               <size>
+                <width>20</width>
+                <height>10000000</height>
+               </size>
+              </property>
+             </spacer>
+            </item>
+            <item>
+             <widget class="QProgressBar" name="progress_bar">
+              <property name="value">
+               <number>0</number>
+              </property>
+             </widget>
+            </item>
+           </layout>
+          </widget>
+         </widget>
+        </item>
+       </layout>
+      </widget>
+      <widget class="QWidget" name="keywords_tab">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <attribute name="title">
+        <string>Ключевые слова</string>
+       </attribute>
+       <layout class="QHBoxLayout" name="horizontalLayout_4">
+        <item>
+         <widget class="QTextEdit" name="keywords_logs"/>
+        </item>
+       </layout>
+      </widget>
+     </widget>
+    </item>
+   </layout>
+  </widget>
+  <widget class="QMenuBar" name="menubar">
+   <property name="geometry">
+    <rect>
+     <x>0</x>
+     <y>0</y>
+     <width>861</width>
+     <height>20</height>
+    </rect>
+   </property>
+  </widget>
+  <widget class="QStatusBar" name="statusbar"/>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>
