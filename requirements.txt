@@ -3,3 +3,4 @@ html2text==2024.2.26
 Requests==2.31.0
 nltk
 pymystem3
+PyQt5
