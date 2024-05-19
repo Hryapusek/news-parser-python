@@ -1,9 +1,9 @@
-import asyncio
+import copy
 import os
 from datetime import datetime, timedelta
+import random
 from threading import Thread, Event
 from concurrent.futures import Future, ThreadPoolExecutor
-import threading
 
 from urlparser.parse_tools import URLLoader
 from urlparser.websiteparsers.article import Article
@@ -28,6 +28,14 @@ class ArticleLoader:
     __date_articles: dict[datetime, Article] = {}
 
     @staticmethod
+    def load_articles_from_saved_files(begin_date: datetime, end_date: datetime):
+        if __class__.__running_loader.is_alive():
+            raise AlreadyRunningException()
+        __class__.__need_to_stop.clear()
+        __class__.__running_loader = Thread(target=ArticleLoader.__load_articles_from_saved_files, args=(begin_date, end_date))
+        __class__.__running_loader.start()
+
+    @staticmethod
     def load_articles_from_internet(begin_date: datetime, end_date: datetime):
         if __class__.__running_loader.is_alive():
             raise AlreadyRunningException()
@@ -40,18 +48,26 @@ class ArticleLoader:
         __class__.__running_loader.join()
 
     @staticmethod
+    def __load_articles_from_saved_files(begin_date: datetime, end_date: datetime):
+        __class__.__read_from_files(begin_date, end_date)
+
+    @staticmethod
     def __load_articles_from_internet(begin_date: datetime, end_date: datetime):
         date_url: dict[datetime, set] = {}
-        for parser in __class__.__website_parsers:
-            if __class__.__need_to_stop.is_set():
-                return
-            result = parser.load_articles_urls(begin_date, end_date)
-            if __class__.__need_to_stop.is_set():
-                return
-            for date in result:
-                if date not in date_url:
-                    date_url[date] = set()
-                date_url[date] = date_url[date].union(result[date])
+        with ThreadPoolExecutor(os.cpu_count()) as pool:
+            futures: list[Future] = []
+            for parser in __class__.__website_parsers:
+                if __class__.__need_to_stop.is_set():
+                    return
+                futures.append(pool.submit(parser.load_articles_urls, begin_date, end_date))
+                if __class__.__need_to_stop.is_set():
+                    return
+            loaded_date_urls_list = [future.result() for future in futures]
+        for loaded_date_urls in loaded_date_urls_list:
+            for loaded_date in loaded_date_urls:
+                if loaded_date not in date_url:
+                    date_url[loaded_date] = set()
+                date_url[loaded_date] = date_url[loaded_date].union(loaded_date_urls[loaded_date])
         __class__.__write_to_files(date_url)
         __class__.__read_from_files(begin_date, end_date)
 
@@ -72,7 +88,7 @@ class ArticleLoader:
                     date_articles[current_date].append(article)
         __class__.__date_articles = date_articles
             
-    def process_url(filename, url, current_date_directory):
+    def __process_url(filename, url, current_date_directory):
         if __class__.__need_to_stop.is_set(): return
         import time
         start_time = time.time()
@@ -86,13 +102,13 @@ class ArticleLoader:
                 return
         print(f"Successfully loaded text from URL, elapsed time: {time.time() - start_time:.2f} seconds")
         if __class__.__need_to_stop.is_set(): return
-        if not text:
+        if not text or text.startswith("**Соблюдение авторских"):
             return
         with open(os.path.join(current_date_directory, filename), "w", encoding="utf-16") as file:
             file.write(text)
 
     @staticmethod
-    def __write_to_files(date_url):
+    def __write_to_files(date_url: dict[datetime, set]):
         if not os.path.isdir(__class__.ARTICLES_FOLDER):
             os.mkdir(__class__.ARTICLES_FOLDER)
         for date in date_url:
@@ -103,19 +119,24 @@ class ArticleLoader:
             
             with ThreadPoolExecutor(os.cpu_count()) as pool:
                 futures: list[Future] = []
-                for url in date_url[date]:
+                if len(date_url[date]) > 50: # take random 50
+                    urls = copy.deepcopy(date_url[date])
+                    result_urls = []
+                    for _ in range(50):
+                        result_urls.append(random.choice(list(urls)))
+                        urls.remove(result_urls[-1])
+                else:
+                    result_urls = date_url[date]
+                for url in result_urls:
                     if __class__.__need_to_stop.is_set(): break
                     filename = __class__.ARTICLE_FILENAME_TEMPLATE % (counter)
                     while os.path.isfile(os.path.join(current_date_directory, filename)):
                         counter += 1
                         filename = __class__.ARTICLE_FILENAME_TEMPLATE % (counter)
                     counter += 1
-                    futures.append(pool.submit(__class__.process_url, filename, url, current_date_directory))
-                for future in futures:
-                    future.result()
+                    futures.append(pool.submit(__class__.__process_url, filename, url, current_date_directory))
+                for future in futures: future.result()
                     
-                    
-                
 
     @staticmethod
     def is_finished():
