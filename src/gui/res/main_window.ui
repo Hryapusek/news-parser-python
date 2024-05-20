@@ -232,7 +232,13 @@
        </attribute>
        <layout class="QHBoxLayout" name="horizontalLayout_4">
         <item>
-         <widget class="QTextEdit" name="keywords_logs"/>
+         <widget class="QTextEdit" name="keywords_logs">
+          <property name="font">
+           <font>
+            <pointsize>14</pointsize>
+           </font>
+          </property>
+         </widget>
         </item>
        </layout>
       </widget>

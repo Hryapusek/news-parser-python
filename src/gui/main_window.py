@@ -1,6 +1,3 @@
-import asyncio
-import sys
-
 from articleloader.article_loader import ArticleLoader
 from articleloader.exceptions import AlreadyRunningException, NotRunningException
 
@@ -11,6 +8,8 @@ from PyQt5.QtCore import QObject, QDate, QTimer
 
 from datetime import datetime, date
 
+from keywords.keywords_parser import KeywordsParser
+
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -20,6 +19,21 @@ class MainWindow(QMainWindow):
         self._ui.load_from_internet_btn.clicked.connect(self.__load_from_internet_btn_clicked)
         self._ui.load_from_docs_btn.clicked.connect(self.__load_from_docs_btn_clicked)
         self._ui.cancel_btn.clicked.connect(self.__call_stop)
+        self.cathegories = KeywordsParser.parse_file("keywords.txt")
+        self.__print_keywords()
+    
+    def __print_keywords(self):
+        if len(self.cathegories) == 0:
+            self._ui.keywords_logs.append("No keywords were found!")
+            return
+        for cathegory in self.cathegories:
+            self._ui.keywords_logs.append(f"# [{cathegory.name}]")
+            if len(cathegory.subcategories) == 0:
+                self._ui.keywords_logs.append(f"  No subcathegories were found!")
+                continue
+            for subcathegory in cathegory.subcategories:
+                self._ui.keywords_logs.append(f"## [{subcathegory.name}]")
+                self._ui.keywords_logs.append(f"  Keywords: {subcathegory.keywords}\n")
 
     def __load_from_internet_btn_clicked(self):
         from_date = __class__.__qdate_to_datetime(self._ui.from_date.date())
