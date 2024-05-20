@@ -1,15 +1,28 @@
+import matplotlib
+matplotlib.use('Qt5Agg')
+
 from articleloader.article_loader import ArticleLoader
 from articleloader.exceptions import AlreadyRunningException, NotRunningException
 
 from .ui_main_window import Ui_MainWindow
 
-from PyQt5.QtWidgets import QApplication, QMainWindow, QMessageBox
-from PyQt5.QtCore import QObject, QDate, QTimer
+from PyQt5.QtWidgets import QMainWindow, QMessageBox
+from PyQt5.QtCore import QDate, QTimer
 
-from datetime import datetime, date
+from datetime import datetime
 
 from keywords.keywords_parser import KeywordsParser
 
+from matplotlib.figure import Figure
+from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
+
+
+class MplCanvas(FigureCanvasQTAgg):
+
+    def __init__(self, parent=None, width=5, height=4, dpi=100):
+        fig = Figure(figsize=(width, height), dpi=dpi)
+        self.axes = fig.add_subplot(111)
+        super(MplCanvas, self).__init__(fig)
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -19,14 +32,28 @@ class MainWindow(QMainWindow):
         self._ui.load_from_internet_btn.clicked.connect(self.__load_from_internet_btn_clicked)
         self._ui.load_from_docs_btn.clicked.connect(self.__load_from_docs_btn_clicked)
         self._ui.cancel_btn.clicked.connect(self.__call_stop)
-        self.cathegories = KeywordsParser.parse_file("keywords.txt")
+        self.categories = KeywordsParser.parse_file("keywords.txt")
+        self.__init_plots()
         self.__print_keywords()
     
+    def __init_plots(self):
+        while self._ui.stacked_plots.count() > 0:
+            self._ui.stacked_plots.removeWidget(self._ui.stacked_plots.widget(self._ui.stacked_plots.count() - 1))
+        for category in self.categories:
+            self._ui.category_combobox.addItem(category.name)
+            self._ui.stacked_plots.addWidget(MplCanvas(self, width=5, height=4, dpi=100))
+
+    # {date: [text, text, text]}
+    # {subcategory: [word, word, word]}
+
+    def __build_plots(self):
+        pass
+
     def __print_keywords(self):
-        if len(self.cathegories) == 0:
+        if len(self.categories) == 0:
             self._ui.keywords_logs.append("No keywords were found!")
             return
-        for cathegory in self.cathegories:
+        for cathegory in self.categories:
             self._ui.keywords_logs.append(f"# [{cathegory.name}]")
             if len(cathegory.subcategories) == 0:
                 self._ui.keywords_logs.append(f"  No subcathegories were found!")
@@ -90,3 +117,5 @@ class MainWindow(QMainWindow):
         else:
             self._ui.articles_logs.append(f"{datetime.now()} Finished!")
             self._ui.progress_bar.setValue(100)
+            if not ArticleLoader.is_stop_called():
+                self.__build_plots()

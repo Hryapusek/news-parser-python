@@ -1,6 +1,6 @@
 import re
 
-from textprocess.text_processing import TextProcessor
+from textprocess.text_processing import normalize
 
 class SubCategory:
     def __init__(self) -> None:
@@ -35,7 +35,7 @@ class KeywordsParser:
                     categories[-1].subcategories[-1].name = line[2:-1]
                 else:
                     try:
-                        categories[-1].subcategories[-1].keywords.extend(TextProcessor.normalize(line))
+                        categories[-1].subcategories[-1].keywords.extend(normalize(line))
                     except IndexError:
                         print(f"Text after cathegory is not allowed! Check category {categories[-1].name}")
                         raise

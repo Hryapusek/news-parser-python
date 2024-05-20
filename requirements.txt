@@ -4,3 +4,4 @@ Requests==2.31.0
 nltk
 pymystem3
 PyQt5
+matplotlib
