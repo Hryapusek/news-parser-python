@@ -24,7 +24,7 @@
     <item>
      <widget class="QTabWidget" name="tabs">
       <property name="currentIndex">
-       <number>0</number>
+       <number>1</number>
       </property>
       <widget class="QWidget" name="graphics_tab">
        <property name="sizePolicy">
@@ -69,7 +69,7 @@
           <item>
            <widget class="QStackedWidget" name="stacked_plots">
             <property name="currentIndex">
-             <number>1</number>
+             <number>0</number>
             </property>
             <widget class="QWidget" name="page"/>
             <widget class="QWidget" name="page_2"/>
@@ -149,14 +149,14 @@
                   <second>0</second>
                   <year>2024</year>
                   <month>5</month>
-                  <day>13</day>
+                  <day>10</day>
                  </datetime>
                 </property>
                 <property name="date">
                  <date>
                   <year>2024</year>
                   <month>5</month>
-                  <day>13</day>
+                  <day>10</day>
                  </date>
                 </property>
                </widget>
@@ -283,6 +283,11 @@
          </widget>
         </item>
        </layout>
+      </widget>
+      <widget class="QWidget" name="limits_tab">
+       <attribute name="title">
+        <string>Ограничения</string>
+       </attribute>
       </widget>
      </widget>
     </item>

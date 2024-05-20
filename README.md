@@ -32,3 +32,8 @@ https://www.kommersant.ru/listpage/lazyloaddocs?regionid=0&listtypeid=4&listid=8
 
 mk.ru
 https://www.mk.ru/news/2024/5/12/
+
+
+- Загрузить статьи с интернетов
+- Загрузить с диска
+

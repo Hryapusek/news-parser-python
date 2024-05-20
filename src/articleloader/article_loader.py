@@ -236,5 +236,9 @@ class ArticleLoader:
         __class__.__need_to_stop.set()
 
     @staticmethod
+    def get_date_articles():
+        return __class__.__date_articles
+
+    @staticmethod
     def is_stop_called():
         return __class__.__need_to_stop.is_set()

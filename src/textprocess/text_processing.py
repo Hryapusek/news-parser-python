@@ -7,7 +7,10 @@ from pymystem3 import Mystem
 from string import punctuation
 
 mystem = Mystem() 
-russian_stopwords = stopwords.words("russian")
+try:
+    russian_stopwords = stopwords.words("russian")
+except:
+    pass
 
 
 def normalize(text: str) -> list[str]:

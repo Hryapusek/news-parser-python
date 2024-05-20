@@ -107,8 +107,8 @@ class Ui_MainWindow(object):
         self.label_2.setObjectName("label_2")
         self.horizontalLayout_2.addWidget(self.label_2)
         self.from_date = QtWidgets.QDateEdit(self.layoutWidget1)
-        self.from_date.setDateTime(QtCore.QDateTime(QtCore.QDate(2024, 5, 13), QtCore.QTime(0, 0, 0)))
-        self.from_date.setDate(QtCore.QDate(2024, 5, 13))
+        self.from_date.setDateTime(QtCore.QDateTime(QtCore.QDate(2024, 5, 10), QtCore.QTime(0, 0, 0)))
+        self.from_date.setDate(QtCore.QDate(2024, 5, 10))
         self.from_date.setObjectName("from_date")
         self.horizontalLayout_2.addWidget(self.from_date)
         self.verticalLayout_2.addLayout(self.horizontalLayout_2)
@@ -164,6 +164,9 @@ class Ui_MainWindow(object):
         self.keywords_logs.setObjectName("keywords_logs")
         self.horizontalLayout_4.addWidget(self.keywords_logs)
         self.tabs.addTab(self.keywords_tab, "")
+        self.limits_tab = QtWidgets.QWidget()
+        self.limits_tab.setObjectName("limits_tab")
+        self.tabs.addTab(self.limits_tab, "")
         self.verticalLayout_5.addWidget(self.tabs)
         MainWindow.setCentralWidget(self.centralwidget)
         self.menubar = QtWidgets.QMenuBar(MainWindow)
@@ -175,8 +178,8 @@ class Ui_MainWindow(object):
         MainWindow.setStatusBar(self.statusbar)
 
         self.retranslateUi(MainWindow)
-        self.tabs.setCurrentIndex(0)
-        self.stacked_plots.setCurrentIndex(1)
+        self.tabs.setCurrentIndex(1)
+        self.stacked_plots.setCurrentIndex(0)
         self.category_combobox.currentIndexChanged['int'].connect(self.stacked_plots.setCurrentIndex) # type: ignore
         QtCore.QMetaObject.connectSlotsByName(MainWindow)
 
@@ -192,3 +195,4 @@ class Ui_MainWindow(object):
         self.cancel_btn.setText(_translate("MainWindow", "Отмена"))
         self.tabs.setTabText(self.tabs.indexOf(self.articles_tab), _translate("MainWindow", "Статьи"))
         self.tabs.setTabText(self.tabs.indexOf(self.keywords_tab), _translate("MainWindow", "Ключевые слова"))
+        self.tabs.setTabText(self.tabs.indexOf(self.limits_tab), _translate("MainWindow", "Ограничения"))

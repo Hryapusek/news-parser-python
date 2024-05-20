@@ -32,7 +32,7 @@ class KeywordsParser:
                     categories[-1].name = line[2:-1]
                 elif line.startswith('##['):
                     categories[-1].subcategories.append(SubCategory())
-                    categories[-1].subcategories[-1].name = line[2:-1]
+                    categories[-1].subcategories[-1].name = line[3:-1]
                 else:
                     try:
                         categories[-1].subcategories[-1].keywords.extend(normalize(line))

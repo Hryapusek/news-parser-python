@@ -162,3 +162,5 @@ cython_debug/
 #.idea/
 
 articles
+3.9env
+.vscode/settings.json
