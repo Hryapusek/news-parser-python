@@ -240,7 +240,20 @@
                  </size>
                 </property>
                 <property name="text">
-                 <string>Очистить</string>
+                 <string>Очистить логи</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QPushButton" name="build_plots_btn">
+                <property name="minimumSize">
+                 <size>
+                  <width>0</width>
+                  <height>30</height>
+                 </size>
+                </property>
+                <property name="text">
+                 <string>Построить графики(на свой страх и риск)</string>
                 </property>
                </widget>
               </item>

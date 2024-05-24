@@ -55,6 +55,7 @@ class MainWindow(QMainWindow):
         self._ui.load_from_docs_btn.clicked.connect(self.__load_from_docs_btn_clicked)
         self._ui.clear_btn.clicked.connect(lambda: self._ui.articles_logs.clear())
         self._ui.cancel_btn.clicked.connect(self.__call_stop)
+        self._ui.build_plots_btn.clicked.connect(self._build_plots)
         self.__categories = KeywordsParser.parse_file("keywords.txt")
         self.__init_constaints()
         self.__init_plots()
@@ -208,10 +209,12 @@ class MainWindow(QMainWindow):
     # {date: [text, text, text]}
     # {subcategory: [word, word, word]}
 
-    def __build_plots(self):
-        begin_date, end_date = ArticleLoader.get_dates()[0], ArticleLoader.get_dates()[
-            1
-        ] + timedelta(1)
+    def _build_plots(self):
+        begin_date, end_date = ArticleLoader.get_dates()
+        if begin_date is None or end_date is None:
+            self._ui.articles_logs.append("Сначала загрузите документы прежде чем строить графики!")
+            return
+        end_date += timedelta(1)
         x_dates = list(daterange(begin_date, end_date))
         date_articles = ArticleLoader.get_date_articles()
         for plot_no, category in enumerate(self.__categories):
@@ -339,4 +342,4 @@ class MainWindow(QMainWindow):
             self._ui.articles_logs.append(f"{datetime.now()} Finished!")
             self._ui.progress_bar.setValue(100)
             if not ArticleLoader.is_stop_called():
-                self.__build_plots()
+                self._build_plots()
