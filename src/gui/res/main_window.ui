@@ -231,6 +231,19 @@
                 </property>
                </widget>
               </item>
+              <item>
+               <widget class="QPushButton" name="clear_btn">
+                <property name="minimumSize">
+                 <size>
+                  <width>0</width>
+                  <height>30</height>
+                 </size>
+                </property>
+                <property name="text">
+                 <string>Очистить</string>
+                </property>
+               </widget>
+              </item>
              </layout>
             </item>
             <item>
@@ -284,7 +297,7 @@
         </item>
        </layout>
       </widget>
-      <widget class="QWidget" name="limits_tab">
+      <widget class="QWidget" name="constraints_tab">
        <attribute name="title">
         <string>Ограничения</string>
        </attribute>
