@@ -32,7 +32,7 @@ ytick.color: 0.9
 
 # background: bluish dark grey
 figure.facecolor: 212946
-axes.facecolor: 212946
+axes.facecolor: FFFFFF
 savefig.facecolor: 212946
 
 # grid: bluish dark grey, slightly lighter than background

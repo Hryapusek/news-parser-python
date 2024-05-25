@@ -101,6 +101,7 @@ class ArticleLoader:
                         break
                     except FTimeoutError:
                         continue
+                if __class__.__need_to_stop.is_set(): pool.shutdown(False);return
                 add_percentage = MAX_PERCENTAGE / articles_count
                 __class__.__set_status(None, __class__.__percentage + add_percentage)   
 
@@ -145,8 +146,6 @@ class ArticleLoader:
                         break
                     except FTimeoutError:
                         continue
-                    except Exception:
-                        break
                 if __class__.__need_to_stop.is_set(): pool.shutdown(False);return
                 percentage = len(loaded_date_urls_list) / len(futures) * MAX_PERCENTAGE
                 __class__.__set_status(None, percentage)

@@ -1,15 +1,9 @@
-import nltk
 import string
-nltk.download("stopwords")
 
-from nltk.corpus import stopwords
+russian_stopwords = open("./res/corpora/stopwords/russian").read().split()
+
 from pymystem3 import Mystem
 from string import punctuation
-
-try:
-    russian_stopwords = stopwords.words("russian")
-except:
-    pass
 
 
 def normalize(text: str) -> list[str]:
