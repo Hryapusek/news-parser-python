@@ -5,4 +5,3 @@ nltk
 pymystem3
 PyQt5
 matplotlib
-mplcyberpunk
