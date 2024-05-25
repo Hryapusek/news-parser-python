@@ -5,4 +5,4 @@ from gui.main_window import MainWindow
 app = QApplication([])
 widget = MainWindow()
 widget.show()
-app.exec_()
+app.exec()

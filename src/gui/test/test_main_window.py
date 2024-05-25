@@ -11,4 +11,4 @@ class TestMainWindow(unittest.TestCase):
         app = QApplication([])
         widget = MainWindow()
         widget.show()
-        app.exec_()
+        app.exec()

@@ -17,7 +17,7 @@ from .exceptions import *
 from urlparser.websiteparsers import * 
 
 def _normalize_article(article: Article):
-    article.tokens = normalize(article.text)
+    return normalize(article.text)
 
 def _process_url(filename, url, current_date_directory):
     start_time = time.time()
@@ -82,18 +82,29 @@ class ArticleLoader:
 
     @staticmethod
     def __normalize_text(MAX_PERCENTAGE: int):
-        MAX_BATCH_PERCENTAGE = MAX_PERCENTAGE/len(__class__.__date_articles)
         __class__.__set_status("Normalizing text", None)
-        for articles in __class__.__date_articles.values():
-            if __class__.__need_to_stop.is_set(): return
-            for article in articles:
-                if __class__.__need_to_stop.is_set(): return
-                _normalize_article(article)
+        articles_count = 0
+        all_articles = []
+        with ProcessPoolExecutor(os.cpu_count()) as pool:
+            futures: list[Future] = []
+            for articles in __class__.__date_articles.values():
+                if __class__.__need_to_stop.is_set(): pool.shutdown(False); return
+                for article in articles:
+                    if __class__.__need_to_stop.is_set(): pool.shutdown(False); return
+                    futures.append(pool.submit(_normalize_article, article))
+                    all_articles.append(article)
+                    articles_count += 1
+            for article, future in zip(all_articles, futures):
+                while not __class__.__need_to_stop.is_set():
+                    try:
+                        article.tokens = future.result(1)
+                        break
+                    except FTimeoutError:
+                        continue
+                add_percentage = MAX_PERCENTAGE / articles_count
+                __class__.__set_status(None, __class__.__percentage + add_percentage)   
 
-            percentage = MAX_BATCH_PERCENTAGE / len(articles)
-            __class__.__set_status(None, __class__.__percentage + percentage)
-
-
+         
     @staticmethod
     def __set_status(new_status: str, percentage: int = None):
         if new_status is not None:
@@ -109,10 +120,10 @@ class ArticleLoader:
     @staticmethod
     def __load_articles_from_saved_files(begin_date: datetime, end_date: datetime):
         __class__.__set_status("Loading saved articles", 0)
-        __class__.__read_from_files(begin_date, end_date, 70)
+        __class__.__read_from_files(begin_date, end_date, 20)
         __class__.__begin_date = begin_date
         __class__.__end_date = end_date
-        __class__.__normalize_text(30)
+        __class__.__normalize_text(80)
         __class__.__set_status("Finished!", 100)
 
     @staticmethod
