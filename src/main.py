@@ -1,4 +1,8 @@
-from urlparser import *
+from PyQt5.QtWidgets import QApplication
+from gui.main_window import MainWindow
 
-print(URLLoader.load_text_from_url('https://www.kommersant.ru/doc/6690880'))
 
+app = QApplication([])
+widget = MainWindow()
+widget.show()
+app.exec_()
