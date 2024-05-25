@@ -157,8 +157,8 @@ class ArticleLoader:
                 if loaded_date not in date_url:
                     date_url[loaded_date] = set()
                 date_url[loaded_date] = date_url[loaded_date].union(loaded_date_urls[loaded_date])
-        __class__.__write_to_files(date_url, 60)
-        __class__.__read_from_files(begin_date, end_date, 20)
+        __class__.__write_to_files(date_url, 30)
+        __class__.__read_from_files(begin_date, end_date, 50)
         __class__.__begin_date = begin_date
         __class__.__end_date = end_date
         __class__.__normalize_text(10)

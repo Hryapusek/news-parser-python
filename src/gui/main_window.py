@@ -1,4 +1,8 @@
 import matplotlib
+import matplotlib.pyplot as plt
+import matplotlib.style
+import mplcyberpunk
+matplotlib.style.use("cyberpunk")
 
 from organisation import get_credits
 from utils.utils import daterange
