@@ -204,7 +204,7 @@ class MainWindow(QMainWindow):
             main_widget.setLayout(vlayout)
             canvas = MplCanvas(main_widget, width=5, height=4, dpi=100)
             plot_logs = QtWidgets.QTextEdit(main_widget)
-            vlayout.addWidget(canvas)
+            vlayout.addWidget(canvas, 4)
             vlayout.addWidget(plot_logs)
             plot_logs.setReadOnly(True)
             plot_logs.setObjectName("articles_logs")
