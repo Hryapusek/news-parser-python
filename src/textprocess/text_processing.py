@@ -14,7 +14,7 @@ subprocess.run = suppress_console_run
 
 import string
 
-russian_stopwords = open("./res/corpora/stopwords/russian").read().split()
+russian_stopwords = open("./res/corpora/stopwords/russian", encoding="utf-16").read().split()
 
 from pymystem3 import Mystem
 from string import punctuation
