@@ -10,7 +10,7 @@ from textprocess.text_processing import normalize
 
 from urlparser.parse_tools import URLLoader
 from urlparser.websiteparsers.article import Article
-from utils.utils import daterange
+from utils.utils import daterange, mute
 
 from .exceptions import *
 
@@ -85,12 +85,12 @@ class ArticleLoader:
         __class__.__set_status("Normalizing text", None)
         articles_count = 0
         all_articles = []
-        with ProcessPoolExecutor(os.cpu_count()) as pool:
+        with ProcessPoolExecutor(os.cpu_count(), initializer=mute) as pool:
             futures: list[Future] = []
             for articles in __class__.__date_articles.values():
-                if __class__.__need_to_stop.is_set(): pool.shutdown(False); return
+                if __class__.__need_to_stop.is_set(): pool.shutdown(True, cancel_futures=True); return
                 for article in articles:
-                    if __class__.__need_to_stop.is_set(): pool.shutdown(False); return
+                    if __class__.__need_to_stop.is_set(): pool.shutdown(True, cancel_futures=True); return
                     futures.append(pool.submit(_normalize_article, article))
                     all_articles.append(article)
                     articles_count += 1
@@ -101,7 +101,7 @@ class ArticleLoader:
                         break
                     except FTimeoutError:
                         continue
-                if __class__.__need_to_stop.is_set(): pool.shutdown(False);return
+                if __class__.__need_to_stop.is_set(): pool.shutdown(True, cancel_futures=True);return
                 add_percentage = MAX_PERCENTAGE / articles_count
                 __class__.__set_status(None, __class__.__percentage + add_percentage)   
 
@@ -132,12 +132,12 @@ class ArticleLoader:
         date_url: dict[datetime, set] = {}
         __class__.__set_status("Loading URLs from internet", 0)
         MAX_PERCENTAGE = 10
-        with ProcessPoolExecutor(os.cpu_count()) as pool:
+        with ProcessPoolExecutor(os.cpu_count(), initializer=mute) as pool:
             futures: list[Future] = []
             for parser in __class__.__website_parsers:
-                if __class__.__need_to_stop.is_set(): pool.shutdown(False);return
+                if __class__.__need_to_stop.is_set(): pool.shutdown(True, cancel_futures=True);return
                 futures.append(pool.submit(parser.load_articles_urls, begin_date, end_date))
-                if __class__.__need_to_stop.is_set(): pool.shutdown(False);return
+                if __class__.__need_to_stop.is_set(): pool.shutdown(True, cancel_futures=True);return
             loaded_date_urls_list = []
             for future in futures:
                 while not __class__.__need_to_stop.is_set():
@@ -146,7 +146,7 @@ class ArticleLoader:
                         break
                     except FTimeoutError:
                         continue
-                if __class__.__need_to_stop.is_set(): pool.shutdown(False);return
+                if __class__.__need_to_stop.is_set(): pool.shutdown(True, cancel_futures=True);return
                 percentage = len(loaded_date_urls_list) / len(futures) * MAX_PERCENTAGE
                 __class__.__set_status(None, percentage)
         __class__.__set_status("URLs loaded, articles loading start soon...", None)
@@ -157,10 +157,10 @@ class ArticleLoader:
                     date_url[loaded_date] = set()
                 date_url[loaded_date] = date_url[loaded_date].union(loaded_date_urls[loaded_date])
         __class__.__write_to_files(date_url, 30)
-        __class__.__read_from_files(begin_date, end_date, 50)
+        __class__.__read_from_files(begin_date, end_date, 10)
         __class__.__begin_date = begin_date
         __class__.__end_date = end_date
-        __class__.__normalize_text(10)
+        __class__.__normalize_text(50)
         __class__.__set_status("Finished!", 100)
 
     @staticmethod
@@ -206,7 +206,7 @@ class ArticleLoader:
             if not os.path.isdir(current_date_directory):
                 os.mkdir(current_date_directory)
             
-            with ProcessPoolExecutor(os.cpu_count()) as pool:
+            with ProcessPoolExecutor(os.cpu_count(), initializer=mute) as pool:
                 futures: list[Future] = []
                 if len(date_url[date]) > 50: # take random 50
                     urls = copy.deepcopy(date_url[date])
@@ -217,7 +217,7 @@ class ArticleLoader:
                 else:
                     result_urls = date_url[date]
                 for url in result_urls:
-                    if __class__.__need_to_stop.is_set(): pool.shutdown(False); return
+                    if __class__.__need_to_stop.is_set(): pool.shutdown(True, cancel_futures=True); return
                     filename = __class__.ARTICLE_FILENAME_TEMPLATE % (counter)
                     while os.path.isfile(os.path.join(current_date_directory, filename)):
                         counter += 1
@@ -225,7 +225,7 @@ class ArticleLoader:
                     counter += 1
                     futures.append(pool.submit(_process_url, filename, url, current_date_directory))
                 for future in futures:
-                    if __class__.__need_to_stop.is_set(): pool.shutdown(False); return
+                    if __class__.__need_to_stop.is_set(): pool.shutdown(True, cancel_futures=True); return
                     else:
                         future.result()
                         __class__.__set_status(None, __class__.__percentage + MAX_DATE_PERCENTAGE/len(futures))
