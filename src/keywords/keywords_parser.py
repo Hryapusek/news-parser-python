@@ -1,5 +1,3 @@
-import re
-
 from textprocess.text_processing import normalize
 
 class SubCategory:
