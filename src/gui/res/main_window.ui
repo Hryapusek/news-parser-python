@@ -114,7 +114,7 @@
                <widget class="QDateEdit" name="from_date">
                 <property name="dateTime">
                  <datetime>
-                  <hour>0</hour>
+                  <hour>21</hour>
                   <minute>0</minute>
                   <second>0</second>
                   <year>2024</year>
@@ -283,7 +283,7 @@
                  </size>
                 </property>
                 <property name="text">
-                 <string>Построить графики(на свой страх и риск)</string>
+                 <string>Построить графики</string>
                 </property>
                </widget>
               </item>
@@ -365,7 +365,7 @@
      <x>0</x>
      <y>0</y>
      <width>861</width>
-     <height>20</height>
+     <height>21</height>
     </rect>
    </property>
   </widget>

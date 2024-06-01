@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file 'main_window.ui'
+# Form implementation generated from reading ui file '.\main_window.ui'
 #
 # Created by: PyQt5 UI code generator 5.15.10
 #
@@ -85,7 +85,7 @@ class Ui_MainWindow(object):
         self.label_2.setObjectName("label_2")
         self.horizontalLayout_2.addWidget(self.label_2)
         self.from_date = QtWidgets.QDateEdit(self.layoutWidget1)
-        self.from_date.setDateTime(QtCore.QDateTime(QtCore.QDate(2024, 5, 10), QtCore.QTime(0, 0, 0)))
+        self.from_date.setDateTime(QtCore.QDateTime(QtCore.QDate(2024, 5, 10), QtCore.QTime(21, 0, 0)))
         self.from_date.setDate(QtCore.QDate(2024, 5, 10))
         self.from_date.setObjectName("from_date")
         self.horizontalLayout_2.addWidget(self.from_date)
@@ -190,7 +190,7 @@ class Ui_MainWindow(object):
         self.gridLayout.addWidget(self.tabs, 0, 0, 1, 1)
         MainWindow.setCentralWidget(self.centralwidget)
         self.menubar = QtWidgets.QMenuBar(MainWindow)
-        self.menubar.setGeometry(QtCore.QRect(0, 0, 861, 20))
+        self.menubar.setGeometry(QtCore.QRect(0, 0, 861, 21))
         self.menubar.setObjectName("menubar")
         MainWindow.setMenuBar(self.menubar)
         self.statusbar = QtWidgets.QStatusBar(MainWindow)
@@ -212,7 +212,7 @@ class Ui_MainWindow(object):
         self.load_from_docs_btn.setText(_translate("MainWindow", "Загрузить из документов"))
         self.cancel_btn.setText(_translate("MainWindow", "Отмена"))
         self.clear_btn.setText(_translate("MainWindow", "Очистить логи"))
-        self.build_plots_btn.setText(_translate("MainWindow", "Построить графики(на свой страх и риск)"))
+        self.build_plots_btn.setText(_translate("MainWindow", "Построить графики"))
         self.tabs.setTabText(self.tabs.indexOf(self.articles_tab), _translate("MainWindow", "Статьи"))
         self.tabs.setTabText(self.tabs.indexOf(self.keywords_tab), _translate("MainWindow", "Ключевые слова"))
         self.tabs.setTabText(self.tabs.indexOf(self.constraints_tab), _translate("MainWindow", "Ограничения"))

@@ -16,8 +16,37 @@ from .exceptions import *
 
 from urlparser.websiteparsers import * 
 
+needed_words = normalize("")
+
+armenia = normalize("Армения")
+azer = normalize("Азербайджан")
+karabah = normalize("Нагорный Карабах")
+group_1 = normalize("Россия Турция Иран Грузия")
+group_2 = normalize("Баку Ереван")
+lach = normalize("Лачинский коридор")
+
 def _normalize_article(article: Article):
     return normalize(article.text)
+
+
+def have_necessary_words(text: str):
+    normalized_text = normalize(text)
+    if armenia[0] in normalized_text or azer[0] in normalized_text or karabah[0] in normalized_text:
+        return True
+
+    if any([(armenia[0] in normalized_text and word in normalized_text) for word in group_1]):
+        return True
+    
+    if any([(azer[0] in normalized_text and word in normalized_text) for word in group_1]):
+        return True
+    
+    if all([word in normalized_text for word in group_2]):
+        return True
+    
+    if all([word in normalized_text for word in lach]):
+        return True
+    
+    return False
 
 def _process_url(filename, url, current_date_directory):
     start_time = time.time()
@@ -30,8 +59,10 @@ def _process_url(filename, url, current_date_directory):
             print(f"Failed to load text from URL after retrying, elapsed time: {time.time() - start_time:.2f} seconds")
             return
     print(f"Successfully loaded text from URL, elapsed time: {time.time() - start_time:.2f} seconds")
-    if not text or text.startswith("**Соблюдение авторских"):
+
+    if not text or text.startswith("**Соблюдение авторских") or not have_necessary_words(text):
         return
+
     with open(os.path.join(current_date_directory, filename), "w", encoding="utf-16") as file:
         file.write(text)
 
@@ -45,7 +76,7 @@ class ArticleLoader:
 
     __need_to_stop = Event()
 
-    __website_parsers: list[BaseParser] = [CommersantParser, MkParser, RiaParser]
+    __website_parsers: list[BaseParser] = [CommersantParser, MkParser]
 
     __date_articles: dict[datetime, list[Article]] = {}
 
@@ -208,10 +239,11 @@ class ArticleLoader:
             
             with ProcessPoolExecutor(os.cpu_count(), initializer=mute) as pool:
                 futures: list[Future] = []
-                if len(date_url[date]) > 50: # take random 50
+                COUNT = 100
+                if len(date_url[date]) > COUNT: # take random 50
                     urls = copy.deepcopy(date_url[date])
                     result_urls = []
-                    for _ in range(50):
+                    for _ in range(COUNT):
                         result_urls.append(random.choice(list(urls)))
                         urls.remove(result_urls[-1])
                 else:

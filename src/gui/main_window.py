@@ -255,7 +255,7 @@ class MainWindow(QMainWindow):
                         count_occurances += self.__count_occurances(
                             subcategory.keywords, article.tokens
                         )
-                    y_value = count_occurances / len(date_articles[date])
+                    y_value = count_occurances / len(date_articles[date]) if len(date_articles[date]) > 0 else 0
                     if y_value < subcategory.low_spinbox.value():
                         plot_logs.append(f"{category.name} - {subcategory.name}: {date} Значение упало НИЖЕ допустимой границы")
                         plot.axes.plot(date, y_value, 'ro', zorder=10)
@@ -264,7 +264,7 @@ class MainWindow(QMainWindow):
                         plot.axes.plot(date, y_value, 'ro', zorder=10)
                     y_values.append(y_value)
                 plot.axes.set_xlim(xmin=x_dates[0], xmax=x_dates[-1])
-                plot.axes.plot(x_dates, y_values, label=subcategory.name, zorder=2)
+                plot.axes.plot(x_dates, y_values, label=subcategory.name, zorder=2, linewidth=5)
                 plot.axes.legend()
                 plot.axes.set_xlabel("Дата")
                 plot.axes.set_ylabel("Значение величины упоминаний")

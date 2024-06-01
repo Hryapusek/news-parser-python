@@ -2,8 +2,8 @@
 * {
    color: #E0E0E0;
    background-color: #22213e;
-   font-family: 'Franklin Gothic Medium', 'Arial Narrow', Arial, sans-serif;
-   font-size: 20px;
+   font-family: 'Trebuchet MS', 'Lucida Sans Unicode', 'Lucida Grande', 'Lucida Sans', Arial, sans-serif;
+   font-size: 25px;
 }
 
 /* QPushButton */
@@ -13,7 +13,7 @@ QPushButton {
    border: 1px solid #22213e;
    border-radius: 5px;
    padding: 8px 16px;
-   font-size: 20px;
+   font-size: 25px;
 }
 
 QProgressBar {

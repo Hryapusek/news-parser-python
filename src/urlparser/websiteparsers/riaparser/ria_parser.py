@@ -27,6 +27,8 @@ class RiaParser(BaseParser):
                 if stop_sign and stop_sign.is_set():
                     return result_urls
                 current_urls, last_time = __class__.__get_urls(current_date_time)
+                if not last_time:
+                    break
                 result_urls[current_date].extend(current_urls)
                 current_date_time = current_date_time.replace(hour=last_time.hour, minute=last_time.minute, second=0)
                 if len(current_urls) < 20:
