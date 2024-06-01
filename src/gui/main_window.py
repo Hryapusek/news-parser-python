@@ -25,6 +25,7 @@ from PyQt5.QtWidgets import (
     QWidget,
     QDoubleSpinBox,
     QSpacerItem,
+    QGridLayout
 )
 from PyQt5 import QtWidgets
 from PyQt5.QtCore import QDate, QTimer, Qt, QSettings
@@ -60,6 +61,7 @@ class MainWindow(QMainWindow):
         self._ui.cancel_btn.clicked.connect(self.__call_stop)
         self._ui.build_plots_btn.clicked.connect(self._build_plots)
         self.__categories = KeywordsParser.parse_file("keywords.txt")
+        self.showMaximized()
         self.__init_constaints()
         self.__init_plots()
         self.__print_keywords()
@@ -69,9 +71,11 @@ class MainWindow(QMainWindow):
     ) -> tuple[QDoubleSpinBox, QDoubleSpinBox]:
         low_spinbox = QDoubleSpinBox()
         low_spinbox.setMinimum(0)
+        low_spinbox.setMinimumWidth(200)
 
         high_spinbox = QDoubleSpinBox()
         high_spinbox.setMinimum(0)
+        high_spinbox.setMinimumWidth(200)
 
         settings = QSettings(*get_credits(), self)
         low_spinbox_name = category_name + "_" + subcategory_name + "_low"
@@ -110,10 +114,10 @@ class MainWindow(QMainWindow):
         return low_spinbox, high_spinbox
 
     def __init_constaints(self):
-        def create_label(text):
+        def create_label(text: str):
             label = QLabel(text)
             font = label.font()
-            font.setPointSize(12)
+            font.setPixelSize(1)
             label.setFont(font)
             return label
         tab_vlayout = QVBoxLayout()
@@ -131,6 +135,7 @@ class MainWindow(QMainWindow):
         scroll_area.setWidget(scroll_area_widget)
         for category in self.__categories:
             frame = QFrame()
+            frame.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
             frame_layout = QVBoxLayout()
             frame.setLayout(frame_layout)
             scroll_area_layout.addWidget(frame)
@@ -191,22 +196,37 @@ class MainWindow(QMainWindow):
 
     def __init_plots(self):
         self.__plots: list[tuple[MplCanvas, QtWidgets.QTextEdit]] = []
-        while self._ui.stacked_plots.count() > 0:
-            self._ui.stacked_plots.removeWidget(
-                self._ui.stacked_plots.widget(self._ui.stacked_plots.count() - 1)
-            )
-        for category in self.__categories:
-            self._ui.category_combobox.addItem(category.name)
-            main_widget = QtWidgets.QWidget(self._ui.stacked_plots)
-            vlayout = QVBoxLayout(main_widget)
-            self._ui.stacked_plots.addWidget(main_widget)
-            main_widget.setLayout(vlayout)
-            canvas = MplCanvas(main_widget, width=5, height=4, dpi=100)
-            plot_logs = QtWidgets.QTextEdit(main_widget)
-            vlayout.addWidget(canvas, 4)
-            vlayout.addWidget(plot_logs)
+
+        tab_vlayout = QVBoxLayout()
+        self._ui.graphics_tab.setLayout(tab_vlayout)
+
+        scroll_area_widget = QWidget()
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setWidget(scroll_area_widget)
+
+        scroll_area_layout = QGridLayout()
+        scroll_area_widget.setLayout(scroll_area_layout)
+
+        tab_vlayout.addWidget(scroll_area)
+        scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOn)
+
+        scroll_area_layout.setVerticalSpacing(60)
+
+        for num, category in enumerate(self.__categories):
+            graph_v_layout = QVBoxLayout()
+
+            name = QLabel(category.name)
+            canvas = MplCanvas(scroll_area_widget, width=5, height=4, dpi=100)
+            plot_logs = QtWidgets.QTextEdit(scroll_area_widget)
             plot_logs.setReadOnly(True)
-            plot_logs.setObjectName("articles_logs")
+
+            graph_v_layout.addWidget(name, 1)
+            graph_v_layout.addWidget(canvas, 12)
+            graph_v_layout.addWidget(plot_logs, 3)
+
+            scroll_area_layout.addLayout(graph_v_layout, num // 3, num % 3)
+            scroll_area_layout.setRowMinimumHeight(num // 3, 800)
             self.__plots.append((canvas, plot_logs))
 
     # {date: [text, text, text]}

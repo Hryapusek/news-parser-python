@@ -2,8 +2,8 @@
 * {
    color: #E0E0E0;
    background-color: #22213e;
-   font-family: Arial, sans-serif;
-   font-size: 14px;
+   font-family: 'Franklin Gothic Medium', 'Arial Narrow', Arial, sans-serif;
+   font-size: 20px;
 }
 
 /* QPushButton */
@@ -13,6 +13,12 @@ QPushButton {
    border: 1px solid #22213e;
    border-radius: 5px;
    padding: 8px 16px;
+   font-size: 20px;
+}
+
+QProgressBar {
+   border: 1px solid #ffffff;
+   text-align: center;
 }
 
 QPushButton:hover {
@@ -34,17 +40,19 @@ QTabBar::tab {
    color: white;
    padding: 10px;
    border: 1px solid #22213e;
-   border-bottom-color: #3C245A; /* same as pane color */
+   border-bottom-color: #3C245A;
+   /* same as pane color */
    border-top-left-radius: 5px;
    border-top-right-radius: 5px;
 }
 
 QTabBar::tab:selected {
    background: #1d1c26;
-   margin-bottom: -1px; /* To avoid double border with the pane */
+   margin-bottom: -1px;
+   /* To avoid double border with the pane */
 }
 
-QTabBar::tab:!selected {
+QTabBar::tab: !selected {
    margin-top: 2px;
 }
 
@@ -101,20 +109,25 @@ QDoubleSpinBox {
    border-radius: 5px;
 }
 
-QDoubleSpinBox::up-button, QDoubleSpinBox::down-button {
-   background-color: #171717;
-   border: 1px solid #22213e;
-   width: 16px;
+QDoubleSpinBox::up-button,
+QDoubleSpinBox::down-button {
+   background-color: #ffffff;
+   width: 50px;
    border-radius: 5px;
 }
 
-QDoubleSpinBox::up-button:hover, QDoubleSpinBox::down-button:hover {
-   background-color: #22213e;
+QDoubleSpinBox::up-button:hover,
+QDoubleSpinBox::down-button:hover {
+   background-color: #6b6b6b;
 }
 
-QDoubleSpinBox::up-arrow, QDoubleSpinBox::down-arrow {
-   width: 10px;
-   height: 10px;
+QDoubleSpinBox::up-arrow,
+QDoubleSpinBox::down-arrow {
+   background-color: transparent;
+   border-left: 2px solid none;
+   border-right: 2px solid none;
+   border-bottom: 2px solid #808080;
+   width: 50px;
 }
 
 /* QFrame */
