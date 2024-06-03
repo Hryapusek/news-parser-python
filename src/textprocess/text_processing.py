@@ -18,7 +18,10 @@ russian_stopwords = open("./res/corpora/stopwords/russian", encoding="utf-16").r
 
 from pymystem3 import Mystem
 from string import punctuation
-mystem = Mystem("res/mystem.exe")
+if os.name == "nt":
+    mystem = Mystem("res/mystem.exe")
+else:
+    mystem = Mystem()
 
 def normalize(text: str) -> list[str]:
     tokens = mystem.lemmatize(text.lower())
