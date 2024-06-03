@@ -1,0 +1,1794 @@
+src/articleloader/exceptions.py
+--------------------
+
+
+class AlreadyRunningException(Exception):
+    pass
+
+
+class NotRunningException(Exception):
+    pass
+
+src/articleloader/__init__.py
+--------------------
+
+src/articleloader/article_loader.py
+--------------------
+import copy
+import os
+import time
+import random
+
+from datetime import datetime, timedelta
+from threading import Thread, Event
+from concurrent.futures import Future, ProcessPoolExecutor, TimeoutError as FTimeoutError
+from textprocess.text_processing import normalize
+
+from urlparser.parse_tools import URLLoader
+from urlparser.websiteparsers.article import Article
+from utils.utils import daterange, mute
+
+from .exceptions import *
+
+from urlparser.websiteparsers import * 
+
+def _normalize_article(article: Article):
+    return normalize(article.text)
+
+def _process_url(filename, url, current_date_directory):
+    start_time = time.time()
+    try:
+        text = URLLoader.load_text_from_url(url)
+    except Exception:
+        try:
+            text = URLLoader.load_text_from_url(url)
+        except Exception:
+            print(f"Failed to load text from URL after retrying, elapsed time: {time.time() - start_time:.2f} seconds")
+            return
+    print(f"Successfully loaded text from URL, elapsed time: {time.time() - start_time:.2f} seconds")
+    if not text or text.startswith("**Соблюдение авторских"):
+        return
+    with open(os.path.join(current_date_directory, filename), "w", encoding="utf-16") as file:
+        file.write(text)
+
+class ArticleLoader:
+
+    ARTICLES_FOLDER = os.path.join(os.path.curdir, "articles")
+    ARTICLE_FILENAME_TEMPLATE = "article_%s.txt"
+    ARTICLE_DATE_DIRECTORY_TEMPLATE = "%Y_%m_%d"
+
+    __running_loader: Thread = None
+
+    __need_to_stop = Event()
+
+    __website_parsers: list[BaseParser] = [CommersantParser, MkParser, RiaParser]
+
+    __date_articles: dict[datetime, list[Article]] = {}
+
+    __begin_date = None
+    __end_date = None
+
+    __status = ""
+    __percentage = 0
+
+    @staticmethod
+    def load_articles_from_saved_files(begin_date: datetime, end_date: datetime):
+        __class__.__check_if_thread_already_alive()
+        __class__.__need_to_stop.clear()
+        __class__.__running_loader = Thread(target=ArticleLoader.__load_articles_from_saved_files, args=(begin_date, end_date), daemon=True)
+        __class__.__running_loader.start()
+
+    @staticmethod
+    def load_articles_from_internet(begin_date: datetime, end_date: datetime):
+        __class__.__check_if_thread_already_alive()
+        __class__.__need_to_stop.clear()
+        __class__.__running_loader = Thread(target=ArticleLoader.__load_articles_from_internet, args=(begin_date, end_date), daemon=True)
+        __class__.__running_loader.start()
+
+    @staticmethod
+    def wait_for_finish():
+        if __class__.__running_loader is None or not __class__.__running_loader.is_alive():
+            raise NotRunningException()
+        __class__.__running_loader.join()
+
+    @staticmethod
+    def __check_if_thread_already_alive():
+        if __class__.__running_loader is not None and __class__.__running_loader.is_alive():
+            raise AlreadyRunningException()
+
+    @staticmethod
+    def __normalize_text(MAX_PERCENTAGE: int):
+        __class__.__set_status("Normalizing text", None)
+        articles_count = 0
+        all_articles = []
+        with ProcessPoolExecutor(os.cpu_count(), initializer=mute) as pool:
+            futures: list[Future] = []
+            for articles in __class__.__date_articles.values():
+                if __class__.__need_to_stop.is_set(): pool.shutdown(True, cancel_futures=True); return
+                for article in articles:
+                    if __class__.__need_to_stop.is_set(): pool.shutdown(True, cancel_futures=True); return
+                    futures.append(pool.submit(_normalize_article, article))
+                    all_articles.append(article)
+                    articles_count += 1
+            for article, future in zip(all_articles, futures):
+                while not __class__.__need_to_stop.is_set():
+                    try:
+                        article.tokens = future.result(1)
+                        break
+                    except FTimeoutError:
+                        continue
+                if __class__.__need_to_stop.is_set(): pool.shutdown(True, cancel_futures=True);return
+                add_percentage = MAX_PERCENTAGE / articles_count
+                __class__.__set_status(None, __class__.__percentage + add_percentage)   
+
+         
+    @staticmethod
+    def __set_status(new_status: str, percentage: int = None):
+        if new_status is not None:
+            __class__.__status = new_status
+        if percentage is not None:
+            __class__.__percentage = percentage
+
+    @staticmethod
+    def get_status() -> tuple[str, int]:
+        return __class__.__status, __class__.__percentage
+
+
+    @staticmethod
+    def __load_articles_from_saved_files(begin_date: datetime, end_date: datetime):
+        __class__.__set_status("Loading saved articles", 0)
+        __class__.__read_from_files(begin_date, end_date, 20)
+        __class__.__begin_date = begin_date
+        __class__.__end_date = end_date
+        __class__.__normalize_text(80)
+        __class__.__set_status("Finished!", 100)
+
+    @staticmethod
+    def __load_articles_from_internet(begin_date: datetime, end_date: datetime):
+        date_url: dict[datetime, set] = {}
+        __class__.__set_status("Loading URLs from internet", 0)
+        MAX_PERCENTAGE = 10
+        with ProcessPoolExecutor(os.cpu_count(), initializer=mute) as pool:
+            futures: list[Future] = []
+            for parser in __class__.__website_parsers:
+                if __class__.__need_to_stop.is_set(): pool.shutdown(True, cancel_futures=True);return
+                futures.append(pool.submit(parser.load_articles_urls, begin_date, end_date))
+                if __class__.__need_to_stop.is_set(): pool.shutdown(True, cancel_futures=True);return
+            loaded_date_urls_list = []
+            for future in futures:
+                while not __class__.__need_to_stop.is_set():
+                    try:
+                        loaded_date_urls_list.append(future.result(1))
+                        break
+                    except FTimeoutError:
+                        continue
+                if __class__.__need_to_stop.is_set(): pool.shutdown(True, cancel_futures=True);return
+                percentage = len(loaded_date_urls_list) / len(futures) * MAX_PERCENTAGE
+                __class__.__set_status(None, percentage)
+        __class__.__set_status("URLs loaded, articles loading start soon...", None)
+        for loaded_date_urls in loaded_date_urls_list:
+            for loaded_date in loaded_date_urls:
+                if __class__.__need_to_stop.is_set(): return
+                if loaded_date not in date_url:
+                    date_url[loaded_date] = set()
+                date_url[loaded_date] = date_url[loaded_date].union(loaded_date_urls[loaded_date])
+        __class__.__write_to_files(date_url, 30)
+        __class__.__read_from_files(begin_date, end_date, 10)
+        __class__.__begin_date = begin_date
+        __class__.__end_date = end_date
+        __class__.__normalize_text(50)
+        __class__.__set_status("Finished!", 100)
+
+    @staticmethod
+    def __read_from_files(begin_date: datetime, end_date: datetime, MAX_PERCENTAGE: int):
+        date_articles = {}
+        if __class__.__need_to_stop.is_set(): return
+        if (end_date-begin_date).days == 0:
+            MAX_DATE_PERCENTAGE = MAX_PERCENTAGE
+        else:
+            MAX_DATE_PERCENTAGE = MAX_PERCENTAGE/((end_date-begin_date).days)
+        for current_date in daterange(begin_date, end_date + timedelta(1)):
+            if __class__.__need_to_stop.is_set(): return
+            __class__.__set_status(f"Reading articles for date {current_date}", None)
+            current_date_directory = os.path.join(__class__.ARTICLES_FOLDER, current_date.strftime(__class__.ARTICLE_DATE_DIRECTORY_TEMPLATE))
+            if not os.path.isdir(current_date_directory):
+                # TODO: log later
+                continue
+            date_articles[current_date] = []
+            for file in os.listdir(current_date_directory):
+                if __class__.__need_to_stop.is_set(): return
+                if not os.path.isfile(os.path.join(current_date_directory, file)):
+                    continue
+                with open(os.path.join(current_date_directory, file), encoding="utf-16") as article_file:
+                    article = Article()
+                    article.date = current_date
+                    article.text = article_file.read().strip()
+                    date_articles[current_date].append(article)
+            __class__.__set_status(None, __class__.__percentage + MAX_DATE_PERCENTAGE)
+        __class__.__date_articles = date_articles
+        
+
+    @staticmethod
+    def __write_to_files(date_url: dict[datetime, set], MAX_PERCENTAGE: int):
+        if not os.path.isdir(__class__.ARTICLES_FOLDER):
+            os.mkdir(__class__.ARTICLES_FOLDER)
+        if __class__.__need_to_stop.is_set(): return
+        MAX_DATE_PERCENTAGE = MAX_PERCENTAGE/len(date_url)
+        for date in date_url:
+            __class__.__set_status(f"Loading urls for date {date}", None)
+            if __class__.__need_to_stop.is_set(): return
+            current_date_directory = os.path.join(__class__.ARTICLES_FOLDER, date.strftime(__class__.ARTICLE_DATE_DIRECTORY_TEMPLATE))
+            counter = 0
+            if not os.path.isdir(current_date_directory):
+                os.mkdir(current_date_directory)
+            
+            with ProcessPoolExecutor(os.cpu_count(), initializer=mute) as pool:
+                futures: list[Future] = []
+                if len(date_url[date]) > 50: # take random 50
+                    urls = copy.deepcopy(date_url[date])
+                    result_urls = []
+                    for _ in range(50):
+                        result_urls.append(random.choice(list(urls)))
+                        urls.remove(result_urls[-1])
+                else:
+                    result_urls = date_url[date]
+                for url in result_urls:
+                    if __class__.__need_to_stop.is_set(): pool.shutdown(True, cancel_futures=True); return
+                    filename = __class__.ARTICLE_FILENAME_TEMPLATE % (counter)
+                    while os.path.isfile(os.path.join(current_date_directory, filename)):
+                        counter += 1
+                        filename = __class__.ARTICLE_FILENAME_TEMPLATE % (counter)
+                    counter += 1
+                    futures.append(pool.submit(_process_url, filename, url, current_date_directory))
+                for future in futures:
+                    if __class__.__need_to_stop.is_set(): pool.shutdown(True, cancel_futures=True); return
+                    else:
+                        future.result()
+                        __class__.__set_status(None, __class__.__percentage + MAX_DATE_PERCENTAGE/len(futures))
+
+    def get_dates() -> tuple[datetime, datetime]:
+        return __class__.__begin_date, __class__.__end_date
+
+    @staticmethod
+    def is_finished():
+        if __class__.__running_loader is None:
+            raise NotRunningException()
+        return not __class__.__running_loader.is_alive()
+
+    @staticmethod
+    def call_stop():
+        if __class__.__need_to_stop.is_set():
+            raise NotRunningException()
+        __class__.__need_to_stop.set()
+
+    @staticmethod
+    def get_date_articles():
+        return __class__.__date_articles
+
+    @staticmethod
+    def is_stop_called():
+        return __class__.__need_to_stop.is_set()
+
+src/articleloader/test/__init__.py
+--------------------
+
+src/articleloader/test/test_article_loader.py
+--------------------
+import asyncio
+import time
+import unittest
+
+from articleloader.article_loader import ArticleLoader
+from datetime import datetime
+
+
+class TestArticleLoader(unittest.TestCase):
+
+    def test_default(self):
+        ArticleLoader.load_articles_from_internet(datetime(2024, 5, 13), datetime(2024, 5, 13))
+        asyncio.run(asyncio.sleep(0.1))
+        while not ArticleLoader.is_finished():
+            print(*ArticleLoader.get_status())
+            asyncio.run(asyncio.sleep(0.1))
+        print(*ArticleLoader.get_status())
+
+    def test_stop(self):
+        ArticleLoader.load_articles_from_internet(datetime(2024, 5, 13), datetime(2024, 5, 13))
+        asyncio.run(asyncio.sleep(20))
+        ArticleLoader.call_stop()
+        ArticleLoader.wait_for_finish()
+src/main.py
+--------------------
+import multiprocessing
+from PyQt5.QtWidgets import QApplication, qApp
+from gui.main_window import MainWindow
+
+if __name__ == "__main__":
+    multiprocessing.freeze_support()
+    multiprocessing.set_start_method("spawn")
+    app = QApplication([])
+    widget = MainWindow()
+    qApp.setStyleSheet(open("./res/style2.qss").read())
+    widget.show()
+    app.exec()
+
+src/gui/res/main_window.ui
+--------------------
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>MainWindow</class>
+ <widget class="QMainWindow" name="MainWindow">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>861</width>
+    <height>653</height>
+   </rect>
+  </property>
+  <property name="sizePolicy">
+   <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+    <horstretch>0</horstretch>
+    <verstretch>0</verstretch>
+   </sizepolicy>
+  </property>
+  <property name="windowTitle">
+   <string>Обработка новостей</string>
+  </property>
+  <widget class="QWidget" name="centralwidget">
+   <property name="sizePolicy">
+    <sizepolicy hsizetype="Maximum" vsizetype="Maximum">
+     <horstretch>0</horstretch>
+     <verstretch>0</verstretch>
+    </sizepolicy>
+   </property>
+   <layout class="QGridLayout" name="gridLayout">
+    <item row="0" column="0">
+     <widget class="QTabWidget" name="tabs">
+      <property name="currentIndex">
+       <number>1</number>
+      </property>
+      <widget class="QWidget" name="graphics_tab">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <attribute name="title">
+        <string>Графики</string>
+       </attribute>
+      </widget>
+      <widget class="QWidget" name="articles_tab">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Maximum" vsizetype="Maximum">
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <attribute name="title">
+        <string>Статьи</string>
+       </attribute>
+       <layout class="QFormLayout" name="formLayout">
+        <item row="0" column="0" colspan="2">
+         <widget class="QSplitter" name="splitter">
+          <property name="sizePolicy">
+           <sizepolicy hsizetype="Minimum" vsizetype="Expanding">
+            <horstretch>0</horstretch>
+            <verstretch>0</verstretch>
+           </sizepolicy>
+          </property>
+          <property name="orientation">
+           <enum>Qt::Horizontal</enum>
+          </property>
+          <widget class="QWidget" name="layoutWidget">
+           <layout class="QVBoxLayout" name="verticalLayout">
+            <property name="rightMargin">
+             <number>5</number>
+            </property>
+            <item>
+             <widget class="QLabel" name="label">
+              <property name="font">
+               <font>
+                <pointsize>12</pointsize>
+               </font>
+              </property>
+              <property name="text">
+               <string>Информация о загрузке</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QTextEdit" name="articles_logs">
+              <property name="readOnly">
+               <bool>true</bool>
+              </property>
+             </widget>
+            </item>
+           </layout>
+          </widget>
+          <widget class="QWidget" name="layoutWidget">
+           <layout class="QVBoxLayout" name="verticalLayout_2">
+            <property name="leftMargin">
+             <number>5</number>
+            </property>
+            <item>
+             <layout class="QHBoxLayout" name="horizontalLayout_2">
+              <item>
+               <widget class="QLabel" name="label_2">
+                <property name="font">
+                 <font>
+                  <pointsize>12</pointsize>
+                 </font>
+                </property>
+                <property name="text">
+                 <string>С какого момента</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QDateEdit" name="from_date">
+                <property name="dateTime">
+                 <datetime>
+                  <hour>0</hour>
+                  <minute>0</minute>
+                  <second>0</second>
+                  <year>2024</year>
+                  <month>5</month>
+                  <day>10</day>
+                 </datetime>
+                </property>
+                <property name="date">
+                 <date>
+                  <year>2024</year>
+                  <month>5</month>
+                  <day>10</day>
+                 </date>
+                </property>
+               </widget>
+              </item>
+             </layout>
+            </item>
+            <item>
+             <layout class="QHBoxLayout" name="horizontalLayout_3">
+              <item>
+               <widget class="QLabel" name="label_3">
+                <property name="font">
+                 <font>
+                  <pointsize>12</pointsize>
+                 </font>
+                </property>
+                <property name="text">
+                 <string>По какой момент</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QDateEdit" name="to_date">
+                <property name="date">
+                 <date>
+                  <year>2024</year>
+                  <month>5</month>
+                  <day>13</day>
+                 </date>
+                </property>
+               </widget>
+              </item>
+             </layout>
+            </item>
+            <item>
+             <layout class="QVBoxLayout" name="verticalLayout_3">
+              <item>
+               <widget class="QPushButton" name="load_from_internet_btn">
+                <property name="sizePolicy">
+                 <sizepolicy hsizetype="Minimum" vsizetype="Minimum">
+                  <horstretch>0</horstretch>
+                  <verstretch>0</verstretch>
+                 </sizepolicy>
+                </property>
+                <property name="minimumSize">
+                 <size>
+                  <width>0</width>
+                  <height>30</height>
+                 </size>
+                </property>
+                <property name="maximumSize">
+                 <size>
+                  <width>16777215</width>
+                  <height>80</height>
+                 </size>
+                </property>
+                <property name="text">
+                 <string>Загрузить из интернета</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QPushButton" name="load_from_docs_btn">
+                <property name="sizePolicy">
+                 <sizepolicy hsizetype="Minimum" vsizetype="Minimum">
+                  <horstretch>0</horstretch>
+                  <verstretch>0</verstretch>
+                 </sizepolicy>
+                </property>
+                <property name="minimumSize">
+                 <size>
+                  <width>0</width>
+                  <height>30</height>
+                 </size>
+                </property>
+                <property name="maximumSize">
+                 <size>
+                  <width>16777215</width>
+                  <height>80</height>
+                 </size>
+                </property>
+                <property name="text">
+                 <string>Загрузить из документов</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QPushButton" name="cancel_btn">
+                <property name="sizePolicy">
+                 <sizepolicy hsizetype="Minimum" vsizetype="Minimum">
+                  <horstretch>0</horstretch>
+                  <verstretch>0</verstretch>
+                 </sizepolicy>
+                </property>
+                <property name="minimumSize">
+                 <size>
+                  <width>0</width>
+                  <height>30</height>
+                 </size>
+                </property>
+                <property name="maximumSize">
+                 <size>
+                  <width>16777215</width>
+                  <height>80</height>
+                 </size>
+                </property>
+                <property name="text">
+                 <string>Отмена</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QPushButton" name="clear_btn">
+                <property name="sizePolicy">
+                 <sizepolicy hsizetype="Minimum" vsizetype="Minimum">
+                  <horstretch>0</horstretch>
+                  <verstretch>0</verstretch>
+                 </sizepolicy>
+                </property>
+                <property name="minimumSize">
+                 <size>
+                  <width>0</width>
+                  <height>30</height>
+                 </size>
+                </property>
+                <property name="maximumSize">
+                 <size>
+                  <width>16777215</width>
+                  <height>80</height>
+                 </size>
+                </property>
+                <property name="text">
+                 <string>Очистить логи</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QPushButton" name="build_plots_btn">
+                <property name="sizePolicy">
+                 <sizepolicy hsizetype="Minimum" vsizetype="Minimum">
+                  <horstretch>0</horstretch>
+                  <verstretch>0</verstretch>
+                 </sizepolicy>
+                </property>
+                <property name="minimumSize">
+                 <size>
+                  <width>0</width>
+                  <height>30</height>
+                 </size>
+                </property>
+                <property name="maximumSize">
+                 <size>
+                  <width>16777215</width>
+                  <height>80</height>
+                 </size>
+                </property>
+                <property name="text">
+                 <string>Построить графики(на свой страх и риск)</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <spacer name="verticalSpacer">
+                <property name="orientation">
+                 <enum>Qt::Vertical</enum>
+                </property>
+                <property name="sizeType">
+                 <enum>QSizePolicy::Expanding</enum>
+                </property>
+                <property name="sizeHint" stdset="0">
+                 <size>
+                  <width>20</width>
+                  <height>80</height>
+                 </size>
+                </property>
+               </spacer>
+              </item>
+             </layout>
+            </item>
+            <item>
+             <layout class="QVBoxLayout" name="verticalLayout_4">
+              <property name="leftMargin">
+               <number>5</number>
+              </property>
+              <property name="rightMargin">
+               <number>5</number>
+              </property>
+              <item>
+               <widget class="QProgressBar" name="progress_bar">
+                <property name="value">
+                 <number>0</number>
+                </property>
+               </widget>
+              </item>
+             </layout>
+            </item>
+           </layout>
+          </widget>
+         </widget>
+        </item>
+       </layout>
+      </widget>
+      <widget class="QWidget" name="keywords_tab">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <attribute name="title">
+        <string>Ключевые слова</string>
+       </attribute>
+       <layout class="QHBoxLayout" name="horizontalLayout_4">
+        <item>
+         <widget class="QTextEdit" name="keywords_logs">
+          <property name="font">
+           <font>
+            <pointsize>14</pointsize>
+           </font>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </widget>
+      <widget class="QWidget" name="constraints_tab">
+       <attribute name="title">
+        <string>Ограничения</string>
+       </attribute>
+      </widget>
+     </widget>
+    </item>
+   </layout>
+  </widget>
+  <widget class="QMenuBar" name="menubar">
+   <property name="geometry">
+    <rect>
+     <x>0</x>
+     <y>0</y>
+     <width>861</width>
+     <height>20</height>
+    </rect>
+   </property>
+  </widget>
+  <widget class="QStatusBar" name="statusbar"/>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>
+
+src/gui/__init__.py
+--------------------
+
+src/gui/ui_main_window.py
+--------------------
+# -*- coding: utf-8 -*-
+
+# Form implementation generated from reading ui file 'main_window.ui'
+#
+# Created by: PyQt5 UI code generator 5.15.10
+#
+# WARNING: Any manual changes made to this file will be lost when pyuic5 is
+# run again.  Do not edit this file unless you know what you are doing.
+
+
+from PyQt5 import QtCore, QtGui, QtWidgets
+
+
+class Ui_MainWindow(object):
+    def setupUi(self, MainWindow):
+        MainWindow.setObjectName("MainWindow")
+        MainWindow.resize(861, 653)
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
+        sizePolicy.setHorizontalStretch(0)
+        sizePolicy.setVerticalStretch(0)
+        sizePolicy.setHeightForWidth(MainWindow.sizePolicy().hasHeightForWidth())
+        MainWindow.setSizePolicy(sizePolicy)
+        self.centralwidget = QtWidgets.QWidget(MainWindow)
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Maximum, QtWidgets.QSizePolicy.Maximum)
+        sizePolicy.setHorizontalStretch(0)
+        sizePolicy.setVerticalStretch(0)
+        sizePolicy.setHeightForWidth(self.centralwidget.sizePolicy().hasHeightForWidth())
+        self.centralwidget.setSizePolicy(sizePolicy)
+        self.centralwidget.setObjectName("centralwidget")
+        self.gridLayout = QtWidgets.QGridLayout(self.centralwidget)
+        self.gridLayout.setObjectName("gridLayout")
+        self.tabs = QtWidgets.QTabWidget(self.centralwidget)
+        self.tabs.setObjectName("tabs")
+        self.graphics_tab = QtWidgets.QWidget()
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
+        sizePolicy.setHorizontalStretch(0)
+        sizePolicy.setVerticalStretch(0)
+        sizePolicy.setHeightForWidth(self.graphics_tab.sizePolicy().hasHeightForWidth())
+        self.graphics_tab.setSizePolicy(sizePolicy)
+        self.graphics_tab.setObjectName("graphics_tab")
+        self.tabs.addTab(self.graphics_tab, "")
+        self.articles_tab = QtWidgets.QWidget()
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Maximum, QtWidgets.QSizePolicy.Maximum)
+        sizePolicy.setHorizontalStretch(0)
+        sizePolicy.setVerticalStretch(0)
+        sizePolicy.setHeightForWidth(self.articles_tab.sizePolicy().hasHeightForWidth())
+        self.articles_tab.setSizePolicy(sizePolicy)
+        self.articles_tab.setObjectName("articles_tab")
+        self.formLayout = QtWidgets.QFormLayout(self.articles_tab)
+        self.formLayout.setObjectName("formLayout")
+        self.splitter = QtWidgets.QSplitter(self.articles_tab)
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Expanding)
+        sizePolicy.setHorizontalStretch(0)
+        sizePolicy.setVerticalStretch(0)
+        sizePolicy.setHeightForWidth(self.splitter.sizePolicy().hasHeightForWidth())
+        self.splitter.setSizePolicy(sizePolicy)
+        self.splitter.setOrientation(QtCore.Qt.Horizontal)
+        self.splitter.setObjectName("splitter")
+        self.layoutWidget = QtWidgets.QWidget(self.splitter)
+        self.layoutWidget.setObjectName("layoutWidget")
+        self.verticalLayout = QtWidgets.QVBoxLayout(self.layoutWidget)
+        self.verticalLayout.setContentsMargins(0, 0, 5, 0)
+        self.verticalLayout.setObjectName("verticalLayout")
+        self.label = QtWidgets.QLabel(self.layoutWidget)
+        font = QtGui.QFont()
+        font.setPointSize(12)
+        self.label.setFont(font)
+        self.label.setObjectName("label")
+        self.verticalLayout.addWidget(self.label)
+        self.articles_logs = QtWidgets.QTextEdit(self.layoutWidget)
+        self.articles_logs.setReadOnly(True)
+        self.articles_logs.setObjectName("articles_logs")
+        self.verticalLayout.addWidget(self.articles_logs)
+        self.layoutWidget1 = QtWidgets.QWidget(self.splitter)
+        self.layoutWidget1.setObjectName("layoutWidget1")
+        self.verticalLayout_2 = QtWidgets.QVBoxLayout(self.layoutWidget1)
+        self.verticalLayout_2.setContentsMargins(5, 0, 0, 0)
+        self.verticalLayout_2.setObjectName("verticalLayout_2")
+        self.horizontalLayout_2 = QtWidgets.QHBoxLayout()
+        self.horizontalLayout_2.setObjectName("horizontalLayout_2")
+        self.label_2 = QtWidgets.QLabel(self.layoutWidget1)
+        font = QtGui.QFont()
+        font.setPointSize(12)
+        self.label_2.setFont(font)
+        self.label_2.setObjectName("label_2")
+        self.horizontalLayout_2.addWidget(self.label_2)
+        self.from_date = QtWidgets.QDateEdit(self.layoutWidget1)
+        self.from_date.setDateTime(QtCore.QDateTime(QtCore.QDate(2024, 5, 10), QtCore.QTime(0, 0, 0)))
+        self.from_date.setDate(QtCore.QDate(2024, 5, 10))
+        self.from_date.setObjectName("from_date")
+        self.horizontalLayout_2.addWidget(self.from_date)
+        self.verticalLayout_2.addLayout(self.horizontalLayout_2)
+        self.horizontalLayout_3 = QtWidgets.QHBoxLayout()
+        self.horizontalLayout_3.setObjectName("horizontalLayout_3")
+        self.label_3 = QtWidgets.QLabel(self.layoutWidget1)
+        font = QtGui.QFont()
+        font.setPointSize(12)
+        self.label_3.setFont(font)
+        self.label_3.setObjectName("label_3")
+        self.horizontalLayout_3.addWidget(self.label_3)
+        self.to_date = QtWidgets.QDateEdit(self.layoutWidget1)
+        self.to_date.setDate(QtCore.QDate(2024, 5, 13))
+        self.to_date.setObjectName("to_date")
+        self.horizontalLayout_3.addWidget(self.to_date)
+        self.verticalLayout_2.addLayout(self.horizontalLayout_3)
+        self.verticalLayout_3 = QtWidgets.QVBoxLayout()
+        self.verticalLayout_3.setObjectName("verticalLayout_3")
+        self.load_from_internet_btn = QtWidgets.QPushButton(self.layoutWidget1)
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Minimum)
+        sizePolicy.setHorizontalStretch(0)
+        sizePolicy.setVerticalStretch(0)
+        sizePolicy.setHeightForWidth(self.load_from_internet_btn.sizePolicy().hasHeightForWidth())
+        self.load_from_internet_btn.setSizePolicy(sizePolicy)
+        self.load_from_internet_btn.setMinimumSize(QtCore.QSize(0, 30))
+        self.load_from_internet_btn.setMaximumSize(QtCore.QSize(16777215, 80))
+        self.load_from_internet_btn.setObjectName("load_from_internet_btn")
+        self.verticalLayout_3.addWidget(self.load_from_internet_btn)
+        self.load_from_docs_btn = QtWidgets.QPushButton(self.layoutWidget1)
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Minimum)
+        sizePolicy.setHorizontalStretch(0)
+        sizePolicy.setVerticalStretch(0)
+        sizePolicy.setHeightForWidth(self.load_from_docs_btn.sizePolicy().hasHeightForWidth())
+        self.load_from_docs_btn.setSizePolicy(sizePolicy)
+        self.load_from_docs_btn.setMinimumSize(QtCore.QSize(0, 30))
+        self.load_from_docs_btn.setMaximumSize(QtCore.QSize(16777215, 80))
+        self.load_from_docs_btn.setObjectName("load_from_docs_btn")
+        self.verticalLayout_3.addWidget(self.load_from_docs_btn)
+        self.cancel_btn = QtWidgets.QPushButton(self.layoutWidget1)
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Minimum)
+        sizePolicy.setHorizontalStretch(0)
+        sizePolicy.setVerticalStretch(0)
+        sizePolicy.setHeightForWidth(self.cancel_btn.sizePolicy().hasHeightForWidth())
+        self.cancel_btn.setSizePolicy(sizePolicy)
+        self.cancel_btn.setMinimumSize(QtCore.QSize(0, 30))
+        self.cancel_btn.setMaximumSize(QtCore.QSize(16777215, 80))
+        self.cancel_btn.setObjectName("cancel_btn")
+        self.verticalLayout_3.addWidget(self.cancel_btn)
+        self.clear_btn = QtWidgets.QPushButton(self.layoutWidget1)
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Minimum)
+        sizePolicy.setHorizontalStretch(0)
+        sizePolicy.setVerticalStretch(0)
+        sizePolicy.setHeightForWidth(self.clear_btn.sizePolicy().hasHeightForWidth())
+        self.clear_btn.setSizePolicy(sizePolicy)
+        self.clear_btn.setMinimumSize(QtCore.QSize(0, 30))
+        self.clear_btn.setMaximumSize(QtCore.QSize(16777215, 80))
+        self.clear_btn.setObjectName("clear_btn")
+        self.verticalLayout_3.addWidget(self.clear_btn)
+        self.build_plots_btn = QtWidgets.QPushButton(self.layoutWidget1)
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Minimum)
+        sizePolicy.setHorizontalStretch(0)
+        sizePolicy.setVerticalStretch(0)
+        sizePolicy.setHeightForWidth(self.build_plots_btn.sizePolicy().hasHeightForWidth())
+        self.build_plots_btn.setSizePolicy(sizePolicy)
+        self.build_plots_btn.setMinimumSize(QtCore.QSize(0, 30))
+        self.build_plots_btn.setMaximumSize(QtCore.QSize(16777215, 80))
+        self.build_plots_btn.setObjectName("build_plots_btn")
+        self.verticalLayout_3.addWidget(self.build_plots_btn)
+        spacerItem = QtWidgets.QSpacerItem(20, 80, QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Expanding)
+        self.verticalLayout_3.addItem(spacerItem)
+        self.verticalLayout_2.addLayout(self.verticalLayout_3)
+        self.verticalLayout_4 = QtWidgets.QVBoxLayout()
+        self.verticalLayout_4.setContentsMargins(5, -1, 5, -1)
+        self.verticalLayout_4.setObjectName("verticalLayout_4")
+        self.progress_bar = QtWidgets.QProgressBar(self.layoutWidget1)
+        self.progress_bar.setProperty("value", 0)
+        self.progress_bar.setObjectName("progress_bar")
+        self.verticalLayout_4.addWidget(self.progress_bar)
+        self.verticalLayout_2.addLayout(self.verticalLayout_4)
+        self.formLayout.setWidget(0, QtWidgets.QFormLayout.SpanningRole, self.splitter)
+        self.tabs.addTab(self.articles_tab, "")
+        self.keywords_tab = QtWidgets.QWidget()
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
+        sizePolicy.setHorizontalStretch(0)
+        sizePolicy.setVerticalStretch(0)
+        sizePolicy.setHeightForWidth(self.keywords_tab.sizePolicy().hasHeightForWidth())
+        self.keywords_tab.setSizePolicy(sizePolicy)
+        self.keywords_tab.setObjectName("keywords_tab")
+        self.horizontalLayout_4 = QtWidgets.QHBoxLayout(self.keywords_tab)
+        self.horizontalLayout_4.setObjectName("horizontalLayout_4")
+        self.keywords_logs = QtWidgets.QTextEdit(self.keywords_tab)
+        font = QtGui.QFont()
+        font.setPointSize(14)
+        self.keywords_logs.setFont(font)
+        self.keywords_logs.setObjectName("keywords_logs")
+        self.horizontalLayout_4.addWidget(self.keywords_logs)
+        self.tabs.addTab(self.keywords_tab, "")
+        self.constraints_tab = QtWidgets.QWidget()
+        self.constraints_tab.setObjectName("constraints_tab")
+        self.tabs.addTab(self.constraints_tab, "")
+        self.gridLayout.addWidget(self.tabs, 0, 0, 1, 1)
+        MainWindow.setCentralWidget(self.centralwidget)
+        self.menubar = QtWidgets.QMenuBar(MainWindow)
+        self.menubar.setGeometry(QtCore.QRect(0, 0, 861, 20))
+        self.menubar.setObjectName("menubar")
+        MainWindow.setMenuBar(self.menubar)
+        self.statusbar = QtWidgets.QStatusBar(MainWindow)
+        self.statusbar.setObjectName("statusbar")
+        MainWindow.setStatusBar(self.statusbar)
+
+        self.retranslateUi(MainWindow)
+        self.tabs.setCurrentIndex(1)
+        QtCore.QMetaObject.connectSlotsByName(MainWindow)
+
+    def retranslateUi(self, MainWindow):
+        _translate = QtCore.QCoreApplication.translate
+        MainWindow.setWindowTitle(_translate("MainWindow", "Обработка новостей"))
+        self.tabs.setTabText(self.tabs.indexOf(self.graphics_tab), _translate("MainWindow", "Графики"))
+        self.label.setText(_translate("MainWindow", "Информация о загрузке"))
+        self.label_2.setText(_translate("MainWindow", "С какого момента"))
+        self.label_3.setText(_translate("MainWindow", "По какой момент"))
+        self.load_from_internet_btn.setText(_translate("MainWindow", "Загрузить из интернета"))
+        self.load_from_docs_btn.setText(_translate("MainWindow", "Загрузить из документов"))
+        self.cancel_btn.setText(_translate("MainWindow", "Отмена"))
+        self.clear_btn.setText(_translate("MainWindow", "Очистить логи"))
+        self.build_plots_btn.setText(_translate("MainWindow", "Построить графики(на свой страх и риск)"))
+        self.tabs.setTabText(self.tabs.indexOf(self.articles_tab), _translate("MainWindow", "Статьи"))
+        self.tabs.setTabText(self.tabs.indexOf(self.keywords_tab), _translate("MainWindow", "Ключевые слова"))
+        self.tabs.setTabText(self.tabs.indexOf(self.constraints_tab), _translate("MainWindow", "Ограничения"))
+
+src/gui/test/test_main_window.py
+--------------------
+import unittest
+
+from datetime import datetime
+from PyQt5.QtWidgets import QApplication, qApp
+from ..main_window import MainWindow
+
+
+class TestMainWindow(unittest.TestCase):
+
+    def test_default(self):
+        app = QApplication([])
+        widget = MainWindow()
+        qApp.setStyleSheet(open("./res/style2.qss").read())
+        widget.show()
+        app.exec()
+
+src/gui/test/__init__.py
+--------------------
+
+src/gui/main_window.py
+--------------------
+import matplotlib
+import matplotlib.pyplot as plt
+import matplotlib.style
+matplotlib.style.use("res/cyberpunk.mplstyle")
+
+from organisation import get_credits
+from utils.utils import daterange
+
+matplotlib.use("Qt5Agg")
+
+from articleloader.article_loader import ArticleLoader
+from articleloader.exceptions import AlreadyRunningException, NotRunningException
+
+from .ui_main_window import Ui_MainWindow
+
+from PyQt5.QtWidgets import (
+    QMainWindow,
+    QMessageBox,
+    QVBoxLayout,
+    QHBoxLayout,
+    QFrame,
+    QScrollArea,
+    QLabel,
+    QSizePolicy,
+    QWidget,
+    QDoubleSpinBox,
+    QSpacerItem,
+    QGridLayout
+)
+from PyQt5 import QtWidgets
+from PyQt5.QtCore import QDate, QTimer, Qt, QSettings
+
+
+from datetime import datetime, timedelta
+
+from keywords.keywords_parser import KeywordsParser
+
+from matplotlib.figure import Figure
+from matplotlib.axes import Axes
+from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
+
+
+class MplCanvas(FigureCanvasQTAgg):
+
+    def __init__(self, parent=None, width=5, height=4, dpi=100):
+        fig: Figure = Figure(figsize=(width, height), dpi=dpi)
+        self.axes: Axes = fig.add_subplot(111)
+        super(MplCanvas, self).__init__(fig)
+
+
+class MainWindow(QMainWindow):
+    def __init__(self):
+        super(MainWindow, self).__init__()
+        self._ui = Ui_MainWindow()
+        self._ui.setupUi(self)
+        self._ui.load_from_internet_btn.clicked.connect(
+            self.__load_from_internet_btn_clicked
+        )
+        self._ui.load_from_docs_btn.clicked.connect(self.__load_from_docs_btn_clicked)
+        self._ui.clear_btn.clicked.connect(lambda: self._ui.articles_logs.clear())
+        self._ui.cancel_btn.clicked.connect(self.__call_stop)
+        self._ui.build_plots_btn.clicked.connect(self._build_plots)
+        self.__categories = KeywordsParser.parse_file("keywords.txt")
+        self.showMaximized()
+        self.__init_constaints()
+        self.__init_plots()
+        self.__print_keywords()
+
+    def __create_spinboxes(
+        self, category_name: str, subcategory_name: str
+    ) -> tuple[QDoubleSpinBox, QDoubleSpinBox]:
+        low_spinbox = QDoubleSpinBox()
+        low_spinbox.setMinimum(0)
+        low_spinbox.setMinimumWidth(200)
+
+        high_spinbox = QDoubleSpinBox()
+        high_spinbox.setMinimum(0)
+        high_spinbox.setMinimumWidth(200)
+
+        settings = QSettings(*get_credits(), self)
+        low_spinbox_name = category_name + "_" + subcategory_name + "_low"
+        high_spinbox_name = category_name + "_" + subcategory_name + "_high"
+
+        low_spinbox_default = 0
+        low_spinbox.setValue(
+            float(settings.value(low_spinbox_name, low_spinbox_default))
+        )
+
+        high_spinbox_default = 5
+        high_spinbox.setValue(
+            float(settings.value(high_spinbox_name, high_spinbox_default))
+        )
+
+        def highValueChanged(new_value):
+            if new_value < low_spinbox.value():
+                low_spinbox.setValue(new_value)
+            settings.setValue(high_spinbox_name, new_value)
+            settings.sync()
+
+        high_spinbox.valueChanged.connect(highValueChanged)
+
+        def lowValueChanged(new_value):
+            if new_value > high_spinbox.value():
+                high_spinbox.setValue(new_value)
+            settings.setValue(low_spinbox_name, new_value)
+            settings.sync()
+
+        low_spinbox.valueChanged.connect(lowValueChanged)
+
+        font = low_spinbox.lineEdit().font()
+        font.setPixelSize(12)
+        low_spinbox.lineEdit().setFont(font)
+        high_spinbox.lineEdit().setFont(font)
+        return low_spinbox, high_spinbox
+
+    def __init_constaints(self):
+        def create_label(text: str):
+            label = QLabel(text)
+            font = label.font()
+            font.setPixelSize(1)
+            label.setFont(font)
+            return label
+        tab_vlayout = QVBoxLayout()
+        self._ui.constraints_tab.setLayout(tab_vlayout)
+        self._constraints: list[tuple[QDoubleSpinBox, QDoubleSpinBox]] = []
+
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        tab_vlayout.addWidget(scroll_area)
+        scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOn)
+
+        scroll_area_widget = QWidget()
+        scroll_area_layout = QVBoxLayout()
+        scroll_area_widget.setLayout(scroll_area_layout)
+        scroll_area.setWidget(scroll_area_widget)
+        for category in self.__categories:
+            frame = QFrame()
+            frame.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+            frame_layout = QVBoxLayout()
+            frame.setLayout(frame_layout)
+            scroll_area_layout.addWidget(frame)
+            frame.setLineWidth(2)
+            frame.setFrameStyle(QFrame.Shape.Panel)
+            frame_layout.addWidget(create_label(category.name))
+            for subcategory in category.subcategories:
+                inner_frame = QFrame()
+                inner_frame_layout = QVBoxLayout()
+                frame_layout.addWidget(inner_frame)
+                inner_frame.setLineWidth(2)
+                inner_frame.setFrameStyle(QFrame.Shape.Panel)
+                inner_frame.setLayout(inner_frame_layout)
+                inner_frame_layout.addWidget(create_label(subcategory.name))
+
+                low_spinbox, high_spinbox = self.__create_spinboxes(
+                    category.name, subcategory.name
+                )
+                low_hlayout = QHBoxLayout()
+                low_label_text = "Нижняя граница:"
+                low_hlayout.addWidget(create_label(f"{low_label_text: <30}"))
+                low_hlayout.addWidget(low_spinbox)
+                low_hlayout.addSpacerItem(
+                    QSpacerItem(
+                        20,
+                        20,
+                        QSizePolicy.Policy.MinimumExpanding,
+                        QSizePolicy.Policy.MinimumExpanding,
+                    )
+                )
+
+                high_hlayout = QHBoxLayout()
+                high_label_text = "Верхняя граница:"
+                high_hlayout.addWidget(create_label(f"{high_label_text: <30}"))
+                high_hlayout.addWidget(high_spinbox)
+                high_hlayout.addSpacerItem(
+                    QSpacerItem(
+                        20,
+                        20,
+                        QSizePolicy.Policy.MinimumExpanding,
+                        QSizePolicy.Policy.MinimumExpanding,
+                    )
+                )
+
+                inner_frame_layout.addLayout(low_hlayout)
+                inner_frame_layout.addLayout(high_hlayout)
+                subcategory.low_spinbox = low_spinbox
+                subcategory.high_spinbox = high_spinbox
+
+        scroll_area_layout.addSpacerItem(
+            QSpacerItem(
+                20,
+                20,
+                QSizePolicy.Policy.MinimumExpanding,
+                QSizePolicy.Policy.MinimumExpanding,
+            )
+        )
+
+    def __init_plots(self):
+        self.__plots: list[tuple[MplCanvas, QtWidgets.QTextEdit]] = []
+
+        tab_vlayout = QVBoxLayout()
+        self._ui.graphics_tab.setLayout(tab_vlayout)
+
+        scroll_area_widget = QWidget()
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setWidget(scroll_area_widget)
+
+        scroll_area_layout = QGridLayout()
+        scroll_area_widget.setLayout(scroll_area_layout)
+
+        tab_vlayout.addWidget(scroll_area)
+        scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOn)
+
+        scroll_area_layout.setVerticalSpacing(60)
+
+        for num, category in enumerate(self.__categories):
+            graph_v_layout = QVBoxLayout()
+
+            name = QLabel(category.name)
+            canvas = MplCanvas(scroll_area_widget, width=5, height=4, dpi=100)
+            plot_logs = QtWidgets.QTextEdit(scroll_area_widget)
+            plot_logs.setReadOnly(True)
+
+            graph_v_layout.addWidget(name, 1)
+            graph_v_layout.addWidget(canvas, 12)
+            graph_v_layout.addWidget(plot_logs, 3)
+
+            scroll_area_layout.addLayout(graph_v_layout, num // 3, num % 3)
+            scroll_area_layout.setRowMinimumHeight(num // 3, 800)
+            self.__plots.append((canvas, plot_logs))
+
+    # {date: [text, text, text]}
+    # {subcategory: [word, word, word]}
+
+    def _build_plots(self):
+        begin_date, end_date = ArticleLoader.get_dates()
+        if begin_date is None or end_date is None:
+            self._ui.articles_logs.append("Сначала загрузите документы прежде чем строить графики!")
+            return
+        end_date += timedelta(1)
+        x_dates = list(daterange(begin_date, end_date))
+        date_articles = ArticleLoader.get_date_articles()
+        for plot_no, category in enumerate(self.__categories):
+            plot, plot_logs = self.__plots[plot_no]
+            plot_logs.clear()
+            plot.axes.clear()
+            for subcategory in category.subcategories:
+                y_values = []
+                for date in daterange(begin_date, end_date):
+                    if date not in date_articles:
+                        y_values.append(0)
+                        continue
+                    count_occurances = 0
+                    for article in date_articles[date]:
+                        count_occurances += self.__count_occurances(
+                            subcategory.keywords, article.tokens
+                        )
+                    y_value = count_occurances / len(date_articles[date])
+                    if y_value < subcategory.low_spinbox.value():
+                        plot_logs.append(f"{category.name} - {subcategory.name}: {date} Значение упало НИЖЕ допустимой границы")
+                        plot.axes.plot(date, y_value, 'ro', zorder=10)
+                    elif y_value > subcategory.high_spinbox.value():
+                        plot_logs.append(f"{category.name} - {subcategory.name}: {date} Значение поднялось ВЫШЕ допустимой границы")
+                        plot.axes.plot(date, y_value, 'ro', zorder=10)
+                    y_values.append(y_value)
+                plot.axes.set_xlim(xmin=x_dates[0], xmax=x_dates[-1])
+                plot.axes.plot(x_dates, y_values, label=subcategory.name, zorder=2)
+                plot.axes.legend()
+                plot.axes.set_xlabel("Дата")
+                plot.axes.set_ylabel("Значение величины упоминаний")
+                plot.draw()
+
+    def __count_occurances(self, keywords: list[str], tokens: list[str]):
+        count = 0
+        for keyword in keywords:
+            count += tokens.count(keyword)
+        return count
+
+    def __print_keywords(self):
+        if len(self.__categories) == 0:
+            self._ui.keywords_logs.append("No keywords were found!")
+            return
+        for cathegory in self.__categories:
+            self._ui.keywords_logs.append(f"# [{cathegory.name}]")
+            if len(cathegory.subcategories) == 0:
+                self._ui.keywords_logs.append(f"  No subcathegories were found!")
+                continue
+            for subcathegory in cathegory.subcategories:
+                self._ui.keywords_logs.append(f"## [{subcathegory.name}]")
+                self._ui.keywords_logs.append(f"  Keywords: {subcathegory.keywords}\n")
+
+    def __load_from_internet_btn_clicked(self):
+        from_date = __class__.__qdate_to_datetime(self._ui.from_date.date())
+        to_date = __class__.__qdate_to_datetime(self._ui.to_date.date())
+        if not self.__check_dates(from_date, to_date):
+            return
+        try:
+            ArticleLoader.load_articles_from_internet(from_date, to_date)
+            QTimer.singleShot(100, self.update_articles_status)
+        except AlreadyRunningException:
+            QMessageBox.critical(
+                self,
+                "Период времени",
+                "Сначала дождитесь завершения выполнения прошлой загрузки.",
+            )
+            return
+
+    def __call_stop(self):
+        try:
+            ArticleLoader.call_stop()
+        except NotRunningException:
+            QMessageBox.information(
+                self,
+                "Остановка",
+                "Остановка уже запрошена, пожалуйста подождите немного времени.",
+            )
+            return
+
+    @staticmethod
+    def __qdate_to_datetime(date_value: QDate):
+        return datetime(
+            date_value.year(), date_value.month(), date_value.day(), 0, 0, 0
+        )
+
+    def __load_from_docs_btn_clicked(self):
+        from_date = __class__.__qdate_to_datetime(self._ui.from_date.date())
+        to_date = __class__.__qdate_to_datetime(self._ui.to_date.date())
+        if not self.__check_dates(from_date, to_date):
+            return
+        try:
+            ArticleLoader.load_articles_from_saved_files(from_date, to_date)
+            QTimer.singleShot(100, self.update_articles_status)
+        except AlreadyRunningException:
+            QMessageBox.critical(
+                self,
+                "Период времени",
+                "Сначала дождитесь завершения выполнения прошлой загрузки.",
+            )
+            return
+
+    def __check_dates(self, from_date, to_date):
+        if from_date > to_date:
+            QMessageBox.critical(
+                self, "Период времени", "Дата начала должна быть меньше даты окончания."
+            )
+            return False
+        if to_date > datetime.today():
+            QMessageBox.critical(
+                self,
+                "Период времени",
+                "Дата окончания должна быть не позднее текущей даты.",
+            )
+            self._ui.to_date.setFocus()
+            return False
+        return True
+
+    def update_articles_status(self):
+        status, percantage = ArticleLoader.get_status()
+        self._ui.articles_logs.append(f"{datetime.now()} {status}")
+        self._ui.progress_bar.setValue(round(percantage))
+        if not ArticleLoader.is_finished():
+            QTimer.singleShot(100, self.update_articles_status)
+            return
+        else:
+            self._ui.articles_logs.append(f"{datetime.now()} Finished!")
+            self._ui.progress_bar.setValue(100)
+            if not ArticleLoader.is_stop_called():
+                self._build_plots()
+
+src/textprocess/__init__.py
+--------------------
+
+src/textprocess/text_processing.py
+--------------------
+import os
+import subprocess
+
+def suppress_console_run(*args, **kwargs):
+    if os.name == 'nt':
+        startupinfo = subprocess.STARTUPINFO()
+        startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        startupinfo.wShowWindow = subprocess.SW_HIDE
+        kwargs['startupinfo'] = startupinfo
+    
+    return subprocess.run(*args, **kwargs)
+
+subprocess.run = suppress_console_run
+
+import string
+
+russian_stopwords = open("./res/corpora/stopwords/russian", encoding="utf-16").read().split()
+
+from pymystem3 import Mystem
+from string import punctuation
+mystem = Mystem()
+
+def normalize(text: str) -> list[str]:
+    tokens = mystem.lemmatize(text.lower())
+    tokens = [token for token in tokens if token not in russian_stopwords
+            and not string.ascii_letters in token
+            and token != " "
+            and token.strip() not in punctuation]
+    return tokens
+
+
+src/urlparser/websiteparsers/base_parser.py
+--------------------
+from abc import ABC, abstractmethod
+from datetime import datetime
+
+
+class BaseParser(ABC):
+
+    prefix = "Base"
+
+    @staticmethod
+    @abstractmethod
+    def load_articles_urls(begin_date: datetime, end_date: datetime, stop_sign = None) \
+                        -> dict[datetime, list[str]]:
+        pass
+
+src/urlparser/websiteparsers/__init__.py
+--------------------
+from .commersant import *
+from .mkparser import *
+from .riaparser import *
+from .base_parser import BaseParser
+
+__all__ = ["CommersantParser", "MkParser", "RiaParser", "BaseParser"]
+
+src/urlparser/websiteparsers/commersant/commersant_parser.py
+--------------------
+import copy
+from datetime import datetime
+
+import requests
+from ..base_parser import BaseParser
+from utils.utils import *
+import bs4
+
+
+class CommersantParser(BaseParser):
+
+    prefix = "commersant"
+
+    __url = "https://www.kommersant.ru/listpage/lazyloaddocs?regionid=0&listtypeid=4&listid=86&date=14.05.2024&intervaltype=1&idafter=6691521"
+    __url_template = "https://www.kommersant.ru/listpage/lazyloaddocs"
+    __url__params = {
+        "regionid": 0,
+        "listtypeid": 4,
+        "listid": 86,
+        "date": "%d.%m.%Y",
+        "intervaltype": 1,
+        "idafter": None,
+    }
+
+    @staticmethod
+    def load_articles_urls(
+        begin_date: datetime, end_date: datetime, stop_sign = None
+    ) -> dict[datetime, list[str]]:
+        result_urls: dict[datetime, list[str]] = {}
+        for current_date in daterange(begin_date, end_date + timedelta(1)):
+            if stop_sign and stop_sign.is_set():
+                return result_urls
+            result_urls[current_date] = __class__.__get_urls(current_date)
+        return result_urls
+
+    def __get_urls(date_time: datetime) -> list[str]:
+        """
+        Raises:
+            - HttpError if something goes wrong
+        """
+        urls = []
+        finish = False
+        last_doc_id = None
+        while not finish:
+            params = copy.deepcopy(__class__.__url__params)
+            params["date"] = date_time.strftime(params["date"])
+            if last_doc_id:
+                params["idafter"] = last_doc_id
+            response = requests.get(__class__.__url_template, params)
+            if not response.ok:
+                response = requests.get(__class__.__url_template, params)
+                if not response.ok:
+                    break
+            response_json = response.json()
+            finish = not response_json["HasNextPage"]
+            for item in response_json["Items"]:
+                last_doc_id = item["DocsID"]
+                urls.append("https://www.kommersant.ru/doc/" + str(item["DocsID"]))
+
+        return urls
+
+src/urlparser/websiteparsers/commersant/__init__.py
+--------------------
+from .commersant_parser import CommersantParser
+
+__all__ = [
+    'CommersantParser'
+]
+
+src/urlparser/websiteparsers/commersant/test/__init__.py
+--------------------
+
+src/urlparser/websiteparsers/commersant/test/test_commersantparser.py
+--------------------
+import unittest
+from datetime import datetime
+from ..commersant_parser import CommersantParser
+
+
+class TestCommersantParser(unittest.TestCase):
+
+    def test_defaut(self):
+        result = CommersantParser.load_articles_urls(datetime(2024, 5, 13), datetime(2024, 5, 13))
+        print(result)
+
+src/urlparser/websiteparsers/riaparser/__init__.py
+--------------------
+from .ria_parser import RiaParser
+
+__all__ = [
+    'RiaParser'
+]
+
+src/urlparser/websiteparsers/riaparser/ria_parser.py
+--------------------
+import copy
+from datetime import datetime
+
+import requests
+from ..base_parser import BaseParser
+from utils.utils import *
+import bs4
+
+
+class RiaParser(BaseParser):
+    
+    mk = "ria"
+
+    __url = "https://ria.ru/services/20240513/more.html?date=20240513T150600"
+    __url_template = "https://ria.ru/services/%Y%m%d/more.html?date=%Y%m%dT%H%M%S"
+
+
+
+    @staticmethod
+    def load_articles_urls(begin_date: datetime, end_date: datetime, stop_sign = None) -> dict[datetime, list[str]]:
+        result_urls: dict[datetime, list[str]] = {}
+        for current_date in daterange(begin_date, end_date + timedelta(1)):
+            result_urls[current_date] = []
+            current_time_lower_threshold = current_date.replace(hour=00, minute=00, second=00)
+            current_date_time = current_date.replace(hour=23, minute=59, second=59)
+            while current_date_time >= current_time_lower_threshold:
+                if stop_sign and stop_sign.is_set():
+                    return result_urls
+                current_urls, last_time = __class__.__get_urls(current_date_time)
+                result_urls[current_date].extend(current_urls)
+                current_date_time = current_date_time.replace(hour=last_time.hour, minute=last_time.minute, second=0)
+                if len(current_urls) < 20:
+                    break
+        return result_urls
+
+
+
+    def __get_url(date_time: datetime):
+        return date_time.strftime(__class__.__url_template)
+    
+    
+    def __get_urls(date_time: datetime) -> tuple[list[str], datetime]:
+        """
+        Raises:
+            - HttpError if something goes wrong
+        """
+        urls = []
+        url = __class__.__get_url(date_time)
+        response = requests.get(url)
+        if not response.ok:
+            return None
+        parser = bs4.BeautifulSoup(response.content.decode(), "html.parser")
+        list_items: list[bs4.element.Tag] = parser.find_all("div", {'class': 'list-item'}, recursive=True)
+        last_time = None
+        for item in list_items:
+            time_tag = item.find("div", {'class': "list-item__date"})
+            content_tag = item.find("div", {'class': "list-item__content"})
+            urls.append(content_tag.find_next("a").attrs.get('href', None))
+            last_time = datetime.strptime(time_tag.text.split(',')[-1].strip(), "%H:%M")
+        return urls, last_time
+
+src/urlparser/websiteparsers/riaparser/test/__init__.py
+--------------------
+
+src/urlparser/websiteparsers/riaparser/test/test_riaparser.py
+--------------------
+import unittest
+from datetime import datetime
+from ..ria_parser import RiaParser
+
+
+class TestRiaParser(unittest.TestCase):
+
+    def test_defaut(self):
+        result = RiaParser.load_articles_urls(datetime(2024, 5, 13), datetime(2024, 5, 13))
+        print(result)
+
+src/urlparser/websiteparsers/mkparser/__init__.py
+--------------------
+from .mk_parser import MkParser
+
+__all__ = [
+    'MkParser'
+]
+
+src/urlparser/websiteparsers/mkparser/test/test_mkparser.py
+--------------------
+import unittest
+from datetime import datetime
+from ..mk_parser import MkParser
+
+
+class TestMkParser(unittest.TestCase):
+
+    def test_defaut(self):
+        result = MkParser.load_articles_urls(datetime(2024, 5, 13), datetime(2024, 5, 13))
+        print(result)
+
+src/urlparser/websiteparsers/mkparser/test/__init__.py
+--------------------
+
+src/urlparser/websiteparsers/mkparser/mk_parser.py
+--------------------
+import copy
+from datetime import datetime
+
+import requests
+from ..base_parser import BaseParser
+from utils.utils import *
+import bs4
+
+
+class MkParser(BaseParser):
+    
+    prefix = "mk"
+
+    __url = "https://www.mk.ru/news/2024/5/12/"
+    __url_template = "https://www.mk.ru/news/%s/%s/%s/"
+
+
+    @staticmethod
+    def load_articles_urls(begin_date: datetime, end_date: datetime, stop_sign = None) -> dict[datetime, list[str]]:
+        result_urls: dict[datetime, list[str]] = {}
+        for current_date in daterange(begin_date, end_date + timedelta(1)):
+            if stop_sign and stop_sign.is_set():
+                return result_urls
+            result_urls[current_date] = __class__.__get_urls(current_date)
+        return result_urls
+
+
+
+    def __get_url(date_time: datetime):
+        year_str = date_time.strftime("%Y")
+        month_str = date_time.strftime("%m").lstrip('0')
+        day_str = date_time.strftime("%d").lstrip('0')
+        return __class__.__url_template % (year_str, month_str, day_str)
+    
+    
+    def __get_urls(date_time: datetime) -> list[str]:
+        """
+        Raises:
+            - HttpError if something goes wrong
+        """
+        urls = []
+        url = __class__.__get_url(date_time)
+        response = requests.get(url)
+        if not response.ok:
+            response = requests.get(url)
+            if not response.ok:
+                return None
+        parser = bs4.BeautifulSoup(response.content.decode(), "html.parser")
+        list_tag = parser.find("ul", {'class': 'news-listing__day-list'}, recursive=True)
+        list_items: list[bs4.element.Tag] = list_tag.find_all("li", {'class': 'news-listing__item'}, recursive=True)
+        for item in list_items:
+            urls.append(item.find("a", {'class': "news-listing__item-link"}).attrs.get('href', None))
+        return urls
+
+src/urlparser/websiteparsers/article.py
+--------------------
+
+from datetime import datetime
+
+
+class Article:
+    def __init__(self) -> None:
+        self.text: str = []
+        self.date: datetime = None
+        self.tokens: list[str] = None
+src/urlparser/exceptions.py
+--------------------
+
+class ErrorResponseCodeException(Exception):
+    def __init__(self, *args) -> None:
+        Exception.__init__(self, args)
+
+src/urlparser/parse_tools.py
+--------------------
+import requests
+import html2text
+import re
+from typing import Union
+from .exceptions import *
+
+
+class URLLoader:
+
+    @staticmethod
+    def load_text_from_url(url: str) -> Union[str, None]:
+        """
+        Returns:
+            Text if there is some, None otherwise
+
+        Raises:
+            - ErrorResponseCodeException: if could not load given url
+        """
+        response = requests.get(url)
+        if not response.ok:
+            raise ErrorResponseCodeException(response.status_code, response.content.decode())
+        
+        parser = html2text.HTML2Text()
+        parser.ignore_links = True
+
+        response = requests.get(url)
+        result = __class__.__extract_consecutive_russian_lines(parser.handle(response.content.decode()), 4, 0.7)
+        if not result:
+            return None
+        return " ".join(result)
+
+    @staticmethod
+    def __extract_consecutive_russian_lines(text: str, threshold=3, russian_threshold=0.5, max_skipped_lines=5):
+        # Split the text into lines
+        lines = text.split('\n')
+        
+        consecutive_count = 0
+        consecutive_russian_lines = []
+        temp_consecutive_russian_lines = []
+        reached_threshold = False
+        skipped_after_threashold_reached = 0
+        
+        for line in lines:
+            # Calculate the percentage of Russian letters in the line
+            total_letters = len(line)
+            russian_letters = len(re.findall(r'[а-яА-ЯёЁ]', line))
+            russian_percentage = russian_letters / total_letters if total_letters > 0 else 0
+            
+            # Check if the percentage of Russian letters exceeds the threshold
+            if russian_percentage >= russian_threshold:
+                skipped_after_threashold_reached = 0
+                consecutive_count += 1
+                temp_consecutive_russian_lines.append(line.strip())
+                if consecutive_count >= threshold:
+                    consecutive_russian_lines.extend(temp_consecutive_russian_lines)
+                    temp_consecutive_russian_lines = []
+                    reached_threshold = True
+            elif reached_threshold:
+                temp_consecutive_russian_lines = []
+                consecutive_count = 0
+                skipped_after_threashold_reached += 1
+                if skipped_after_threashold_reached >= max_skipped_lines:
+                    return consecutive_russian_lines
+            else:
+                consecutive_count = 0
+                temp_consecutive_russian_lines = []
+        
+        if reached_threshold:
+            return consecutive_russian_lines
+
+        return None
+
+src/urlparser/__init__.py
+--------------------
+from .parse_tools import *
+
+__all__ = [
+    'URLLoader'
+]
+
+src/keywords/__init__.py
+--------------------
+
+src/keywords/keywords_parser.py
+--------------------
+from textprocess.text_processing import normalize
+
+class SubCategory:
+    def __init__(self) -> None:
+        self.name: str = ""
+        self.keywords: list[str] = []
+
+class Category:
+    def __init__(self) -> None:
+        self.name: str = ""
+        self.subcategories: list[SubCategory] = []
+
+class KeywordsParser:
+
+    @staticmethod
+    def parse_file(file_path) -> list[Category]:
+        categories: list[Category] = []
+
+        with open(file_path, 'r', encoding='utf-8') as file:
+            text = file.read()
+
+            lines = text.strip().split('\n')
+
+            for line in lines:
+                line = line.strip()
+                if len(line) == 0:
+                    continue
+                if line.startswith('#['):
+                    categories.append(Category())
+                    categories[-1].name = line[2:-1]
+                elif line.startswith('##['):
+                    categories[-1].subcategories.append(SubCategory())
+                    categories[-1].subcategories[-1].name = line[3:-1]
+                else:
+                    try:
+                        categories[-1].subcategories[-1].keywords.extend(normalize(line))
+                    except IndexError:
+                        print(f"Text after cathegory is not allowed! Check category {categories[-1].name}")
+                        raise
+        
+        return categories
+
+src/utils/__init__.py
+--------------------
+
+src/utils/utils.py
+--------------------
+from datetime import timedelta
+import sys
+import os
+
+def daterange(start_date, end_date):
+    for n in range(int((end_date - start_date).days)):
+        yield start_date + timedelta(n)
+
+def mute():
+    sys.stdout = open(os.devnull, 'w')   
+src/organisation.py
+--------------------
+ORGANIZATION = "News Analizer"
+SOFT = "PyQt5 News Analizer cross-platform program"
+
+
+def get_credits() -> tuple[str, str]:
+    return ORGANIZATION, SOFT
