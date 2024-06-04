@@ -213,6 +213,8 @@ class MainWindow(QMainWindow):
 
         scroll_area_layout.setVerticalSpacing(60)
 
+        COUNT_IN_ROW = 2
+
         for num, category in enumerate(self.__categories):
             graph_v_layout = QVBoxLayout()
 
@@ -225,8 +227,8 @@ class MainWindow(QMainWindow):
             graph_v_layout.addWidget(canvas, 12)
             graph_v_layout.addWidget(plot_logs, 3)
 
-            scroll_area_layout.addLayout(graph_v_layout, num // 3, num % 3)
-            scroll_area_layout.setRowMinimumHeight(num // 3, 800)
+            scroll_area_layout.addLayout(graph_v_layout, num // COUNT_IN_ROW, num % COUNT_IN_ROW)
+            scroll_area_layout.setRowMinimumHeight(num // COUNT_IN_ROW, 800)
             self.__plots.append((canvas, plot_logs))
 
     # {date: [text, text, text]}
