@@ -137,6 +137,7 @@ class MainWindow(QMainWindow):
         scroll_area.setWidget(scroll_area_widget)
         for category in self.__categories:
             frame = QFrame()
+            frame.setContentsMargins(2, 2, 2, 40)
             frame.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
             frame_layout = QVBoxLayout()
             frame.setLayout(frame_layout)
@@ -268,7 +269,7 @@ class MainWindow(QMainWindow):
                         plot.axes.plot(date, y_value, 'ro', zorder=10)
                     y_values.append(y_value)
                 plot.axes.set_xlim(xmin=x_dates[0], xmax=x_dates[-1])
-                plot.axes.plot(x_dates, y_values, label=subcategory.name, zorder=2, linewidth=5)
+                plot.axes.plot(x_dates, y_values, label=subcategory.name[:15], zorder=2, linewidth=5)
                 plot.axes.legend()
                 plot.axes.set_xlabel("Дата")
                 plot.axes.set_ylabel("Значение величины упоминаний")
