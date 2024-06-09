@@ -72,10 +72,12 @@ class MainWindow(QMainWindow):
         low_spinbox = QDoubleSpinBox()
         low_spinbox.setMinimum(0)
         low_spinbox.setMinimumWidth(200)
+        low_spinbox.setMaximum(1000000)
 
         high_spinbox = QDoubleSpinBox()
         high_spinbox.setMinimum(0)
         high_spinbox.setMinimumWidth(200)
+        high_spinbox.setMaximum(1000000)
 
         settings = QSettings(*get_credits(), self)
         low_spinbox_name = category_name + "_" + subcategory_name + "_low"
