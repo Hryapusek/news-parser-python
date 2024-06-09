@@ -25,10 +25,11 @@ from PyQt5.QtWidgets import (
     QWidget,
     QDoubleSpinBox,
     QSpacerItem,
-    QGridLayout
+    QGridLayout,
 )
 from PyQt5 import QtWidgets
 from PyQt5.QtCore import QDate, QTimer, Qt, QSettings
+from PyQt5.QtGui import QPixmap
 
 
 from datetime import datetime, timedelta
@@ -61,6 +62,9 @@ class MainWindow(QMainWindow):
         self._ui.cancel_btn.clicked.connect(self.__call_stop)
         self._ui.build_plots_btn.clicked.connect(self._build_plots)
         self.__categories = KeywordsParser.parse_file("keywords.txt")
+        self._ui.image_label.setPixmap(QPixmap("./res/gerb.jpg").scaled(400, 400))
+        self._ui.image_label.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Minimum)
+        self._ui.image_label.setMaximumSize(400, 400)
         self.showMaximized()
         self.__init_constaints()
         self.__init_plots()
@@ -140,7 +144,7 @@ class MainWindow(QMainWindow):
         for category in self.__categories:
             frame = QFrame()
             frame.setContentsMargins(2, 2, 2, 40)
-            frame.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+            frame.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
             frame_layout = QVBoxLayout()
             frame.setLayout(frame_layout)
             scroll_area_layout.addWidget(frame)
@@ -196,7 +200,7 @@ class MainWindow(QMainWindow):
             QSpacerItem(
                 20,
                 20,
-                QSizePolicy.Policy.MinimumExpanding,
+                QSizePolicy.Policy.Minimum,
                 QSizePolicy.Policy.MinimumExpanding,
             )
         )
@@ -225,7 +229,8 @@ class MainWindow(QMainWindow):
         for num, category in enumerate(self.__categories):
             graph_v_layout = QVBoxLayout()
 
-            name = QLabel(category.name)
+            name = QLabel(category.name.upper())
+            name.setStyleSheet("font-weight: bold;")
             canvas = MplCanvas(scroll_area_widget, width=5, height=4, dpi=100)
             plot_logs = QtWidgets.QTextEdit(scroll_area_widget)
             plot_logs.setReadOnly(True)
