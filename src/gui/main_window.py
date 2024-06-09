@@ -116,11 +116,13 @@ class MainWindow(QMainWindow):
         return low_spinbox, high_spinbox
 
     def __init_constaints(self):
-        def create_label(text: str):
+        def create_subcategory_label(text: str):
             label = QLabel(text)
-            font = label.font()
-            font.setPixelSize(1)
-            label.setFont(font)
+            return label
+        
+        def create_category_label(text: str):
+            label = QLabel(text)
+            label.setStyleSheet("font-weight: bold;")
             return label
         tab_vlayout = QVBoxLayout()
         self._ui.constraints_tab.setLayout(tab_vlayout)
@@ -144,22 +146,24 @@ class MainWindow(QMainWindow):
             scroll_area_layout.addWidget(frame)
             frame.setLineWidth(2)
             frame.setFrameStyle(QFrame.Shape.Panel)
-            frame_layout.addWidget(create_label(category.name))
+            frame_layout.addWidget(create_category_label(category.name))
+            count = 0
             for subcategory in category.subcategories:
+                count += 1
                 inner_frame = QFrame()
                 inner_frame_layout = QVBoxLayout()
                 frame_layout.addWidget(inner_frame)
                 inner_frame.setLineWidth(2)
                 inner_frame.setFrameStyle(QFrame.Shape.Panel)
                 inner_frame.setLayout(inner_frame_layout)
-                inner_frame_layout.addWidget(create_label(subcategory.name))
+                inner_frame_layout.addWidget(create_subcategory_label(f"{count}. {subcategory.name}"))
 
                 low_spinbox, high_spinbox = self.__create_spinboxes(
                     category.name, subcategory.name
                 )
                 low_hlayout = QHBoxLayout()
                 low_label_text = "Нижняя граница:"
-                low_hlayout.addWidget(create_label(f"{low_label_text: <30}"))
+                low_hlayout.addWidget(create_subcategory_label(f"{low_label_text: <30}"))
                 low_hlayout.addWidget(low_spinbox)
                 low_hlayout.addSpacerItem(
                     QSpacerItem(
@@ -172,7 +176,7 @@ class MainWindow(QMainWindow):
 
                 high_hlayout = QHBoxLayout()
                 high_label_text = "Верхняя граница:"
-                high_hlayout.addWidget(create_label(f"{high_label_text: <30}"))
+                high_hlayout.addWidget(create_subcategory_label(f"{high_label_text: <30}"))
                 high_hlayout.addWidget(high_spinbox)
                 high_hlayout.addSpacerItem(
                     QSpacerItem(
@@ -269,7 +273,7 @@ class MainWindow(QMainWindow):
                         plot.axes.plot(date, y_value, 'ro', zorder=10)
                     y_values.append(y_value)
                 plot.axes.set_xlim(xmin=x_dates[0], xmax=x_dates[-1])
-                plot.axes.plot(x_dates, y_values, label=subcategory.name[:15], zorder=2, linewidth=5)
+                plot.axes.plot(x_dates, y_values, label=subcategory.name[:25], zorder=2, linewidth=5)
                 plot.axes.legend()
                 plot.axes.set_xlabel("Дата")
                 plot.axes.set_ylabel("Значение величины упоминаний")
